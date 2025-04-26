@@ -45,7 +45,7 @@ jobs:
       - run: terraform show -json plan.out > plan.json
 
       # 6 — post (or update) the sticky PR comment
-      - uses: liatrio/terraform-change-pr-commenter@v1
+      - uses: liatrio/terraform-change-pr-commenter@v1.4.0
         with:
           plan-json-file: plan.json         # required
           comment-title: "🛠️ Terraform plan summary"
