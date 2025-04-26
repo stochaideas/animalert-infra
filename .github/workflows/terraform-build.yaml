@@ -9,7 +9,7 @@ env:
   TF_IN_AUTOMATION: true
   TF_CLI_ARGS_init: -input=false
   TF_CLI_ARGS_apply: -auto-approve -input=false
-  AWS_REGION: us-east-1
+  AWS_REGION: eu-central-1
 
 jobs:
   terraform-checks:
@@ -24,7 +24,7 @@ jobs:
       # Acquire short‑lived AWS creds via OIDC
       - uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-oidc-terraform-plan
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GithubTerraformReadonly
           aws-region: ${{ env.AWS_REGION }}
 
       # Formatting, lint, static analysis
@@ -61,7 +61,7 @@ jobs:
       # Higher‑privilege deploy role
       - uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-oidc-terraform-apply
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GithubTerraform
           aws-region: ${{ env.AWS_REGION }}
 
       - run: terraform init
