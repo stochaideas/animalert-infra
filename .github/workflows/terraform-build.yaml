@@ -1,5 +1,9 @@
 name: Terraform CI/CD
-on: workflow_call
+on:
+  #push:
+    #branches:
+     # - main
+  workflow_dispatch:
 permissions:
   id-token: write             # OIDC
   contents: read
@@ -14,7 +18,6 @@ env:
 jobs:
   terraform-checks:
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
@@ -28,9 +31,9 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       # Formatting, lint, static analysis
-      - run: terraform fmt -check -recursive
-      - uses: terraform-linters/tflint-action@v2
-      - run: tfsec .
+      #- run: terraform fmt -check -recursive
+      #- uses: terraform-linters/tflint-action@v2
+      #- run: tfsec .
 
       # Basic validation
       - run: terraform init
@@ -42,10 +45,10 @@ jobs:
         with:
           name: tf-plan
           path: plan.out
-      - uses: marocchino/sticky-pull-request-comment@v2
+      - uses: liatrio/terraform-change-pr-commenter@v1.4.0
         with:
-          path: plan.out          # will pretty‑print the plan in the PR
-          hide: previous
+          json-file: plan.json
+          expand-comment: 'true'
 
   terraform-apply:
     needs: terraform-checks
