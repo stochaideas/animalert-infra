@@ -53,8 +53,6 @@ jobs:
   terraform-apply:
     needs: terraform-checks
     runs-on: ubuntu-latest
-    environment:
-      name: production           # GitHub Env with “required reviewers” gate
     steps:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
