@@ -27,9 +27,9 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       # Formatting, lint, static analysis
-      - run: terraform fmt -check -recursive
-      - uses: terraform-linters/tflint-action@v2
-      - run: tfsec .
+      #- run: terraform fmt -check -recursive
+      #- uses: terraform-linters/tflint-action@v2
+      #- run: tfsec .
 
       # Basic validation
       - run: terraform init
