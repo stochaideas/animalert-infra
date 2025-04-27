@@ -35,7 +35,7 @@ variable "tls_domain" {
 }
 
 data "aws_acm_certificate" "selected" {
-  domain_name = var.tls_domain
+  domain = var.tls_domain
   statuses    = ["ISSUED"]
   most_recent = true
   types       = ["AMAZON_ISSUED"]
