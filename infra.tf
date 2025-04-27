@@ -17,7 +17,7 @@ variable "vpc_id" {
 
 variable "public_subnets" {
   type = list(string)
-  # example: default = ["subnet-11111111", "subnet-22222222"]
+  example: default = ["subnet-0eb9d9ee655898647", "subnet-0458ee3a121ef69d2"]
 }
 
 variable "private_subnets" {
