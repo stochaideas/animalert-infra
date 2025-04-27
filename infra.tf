@@ -1,184 +1,91 @@
 ###############################################################################
-# Terraform configuration for Animalert stack – HTTPS‑only ALB + port 3000 app
+# Terraform Required Providers
 ###############################################################################
-#  ➜ ALB exposed via HTTPS (443) only
-#  ➜ Fargate web‑app container listens on port 3000
-#  ➜ Target group/SG updated accordingly
-###############################################################################
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.40" # make sure you have 5.33+ for managed EBS‑on‑Fargate
+    }
+  }
+}
 
 ###############################################################################
-# 0. Provider & global data
+# 1. Providers and Variables
 ###############################################################################
 provider "aws" {
   region = var.aws_region
 }
 
-data "aws_availability_zones" "available" {
-  state = "available"
-}
-
-###############################################################################
-# 1. Variables
-###############################################################################
 variable "aws_region" {
-  description = "AWS region to deploy into"
-  type        = string
-  default     = "eu-central-1"
+  type    = string
+  default = "eu-central-1"
 }
 
-variable "vpc_cidr" {
-  type        = string
-  default     = "10.0.0.0/16"
+variable "vpc_id" {
+  type    = string
+  default = "vpc-0f7d15a949f96e201" # CHANGE ME
 }
 
-variable "public_subnet_cidrs" {
+variable "public_subnets" {
   type    = list(string)
-  default = ["10.0.1.0/24", "10.0.2.0/24"]
+  default = [
+    "subnet-0eb9d9ee655898647",
+    "subnet-0458ee3a121ef69d2"
+  ] # CHANGE ME
 }
 
-variable "private_subnet_cidrs" {
+variable "private_subnets" {
   type    = list(string)
-  default = ["10.0.101.0/24", "10.0.102.0/24"]
-}
-
-variable "ebs_volume_size_gb" {
-  type    = number
-  default = 20
-}
-
-# ACM cert for the HTTPS listener
-variable "alb_certificate_arn" {
-  description = "ACM certificate ARN for ALB HTTPS listener"
-  type        = string
+  default = [
+    "subnet-0eb9d9ee655898647",
+    "subnet-0458ee3a121ef69d2"
+  ] # CHANGE ME
 }
 
 ###############################################################################
-# 2. Networking – VPC, subnets, IGW, NAT
-###############################################################################
-resource "aws_vpc" "main" {
-  cidr_block           = var.vpc_cidr
-  enable_dns_support   = true
-  enable_dns_hostnames = true
-  tags = { Name = "animalert-vpc" }
-}
-
-resource "aws_internet_gateway" "igw" {
-  vpc_id = aws_vpc.main.id
-  tags   = { Name = "animalert-igw" }
-}
-
-resource "aws_subnet" "public" {
-  count                   = length(var.public_subnet_cidrs)
-  vpc_id                  = aws_vpc.main.id
-  cidr_block              = var.public_subnet_cidrs[count.index]
-  availability_zone       = data.aws_availability_zones.available.names[count.index]
-  map_public_ip_on_launch = true
-  tags                    = { Name = "animalert-public-${count.index + 1}" }
-}
-
-resource "aws_route_table" "public" {
-  vpc_id = aws_vpc.main.id
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.igw.id
-  }
-  tags = { Name = "animalert-public-rt" }
-}
-
-resource "aws_route_table_association" "public" {
-  count          = length(aws_subnet.public)
-  subnet_id      = aws_subnet.public[count.index].id
-  route_table_id = aws_route_table.public.id
-}
-
-resource "aws_eip" "nat" {
-  count = length(aws_subnet.public)
-  domain = "vpc"
-  tags  = { Name = "animalert-nat-eip-${count.index + 1}" }
-}
-
-resource "aws_nat_gateway" "nat" {
-  count         = length(aws_subnet.public)
-  allocation_id = aws_eip.nat[count.index].id
-  subnet_id     = aws_subnet.public[count.index].id
-  depends_on    = [aws_internet_gateway.igw]
-  tags          = { Name = "animalert-nat-${count.index + 1}" }
-}
-
-resource "aws_subnet" "private" {
-  count             = length(var.private_subnet_cidrs)
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = var.private_subnet_cidrs[count.index]
-  availability_zone = data.aws_availability_zones.available.names[count.index]
-  tags              = { Name = "animalert-private-${count.index + 1}" }
-}
-
-resource "aws_route_table" "private" {
-  count  = length(aws_subnet.private)
-  vpc_id = aws_vpc.main.id
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.nat[count.index].id
-  }
-  tags = { Name = "animalert-private-rt-${count.index + 1}" }
-}
-
-resource "aws_route_table_association" "private" {
-  count          = length(aws_subnet.private)
-  subnet_id      = aws_subnet.private[count.index].id
-  route_table_id = aws_route_table.private[count.index].id
-}
-
-locals {
-  public_subnet_ids  = [for s in aws_subnet.public  : s.id]
-  private_subnet_ids = [for s in aws_subnet.private : s.id]
-}
-
-###############################################################################
-# 3. S3 Buckets (Images, Logs, Backups)
+# 2. S3 Buckets (Images, Logs, Backups)
 ###############################################################################
 resource "aws_s3_bucket" "images" {
-  bucket = "animalert-images"
+  bucket = "animalert-images"  # CHANGE to your unique bucket name
   acl    = "private"
 }
 
 resource "aws_s3_bucket" "logs" {
-  bucket = "animalert-logs"
+  bucket = "animalert-logs"    # CHANGE to your unique bucket name
   acl    = "private"
 }
 
 resource "aws_s3_bucket" "backups" {
-  bucket = "animalert-backups"
+  bucket = "animalert-backups" # CHANGE to your unique bucket name
   acl    = "private"
 }
 
 ###############################################################################
-# 4. ECR Repository
+# 3. ECR Repository (to store the Docker image)
 ###############################################################################
 resource "aws_ecr_repository" "web_app_repo" {
   name                 = "animalert-webapp"
   image_tag_mutability = "MUTABLE"
-  image_scanning_configuration {
-    scan_on_push = true
-  }
 }
 
 ###############################################################################
-# 5. Security Groups
+# 4. Networking: Security Groups for ALB and ECS Service
 ###############################################################################
 resource "aws_security_group" "alb_sg" {
   name   = "alb-sg"
-  vpc_id = aws_vpc.main.id
+  vpc_id = var.vpc_id
 
   ingress {
-    description = "HTTPS inbound"
-    from_port   = 443
-    to_port     = 443
+    description = "Allow HTTP in"
+    from_port   = 80
+    to_port     = 80
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
   egress {
+    description = "Allow all out"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
@@ -188,17 +95,18 @@ resource "aws_security_group" "alb_sg" {
 
 resource "aws_security_group" "ecs_service_sg" {
   name   = "ecs-service-sg"
-  vpc_id = aws_vpc.main.id
+  vpc_id = var.vpc_id
 
   ingress {
-    description     = "App traffic from ALB"
-    from_port       = 3000
-    to_port         = 3000
+    description     = "Allow traffic from ALB"
+    from_port       = 80
+    to_port         = 80
     protocol        = "tcp"
     security_groups = [aws_security_group.alb_sg.id]
   }
 
   egress {
+    description = "Allow all outbound"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
@@ -207,13 +115,13 @@ resource "aws_security_group" "ecs_service_sg" {
 }
 
 ###############################################################################
-# 6. Application Load Balancer – HTTPS listener
+# 5. Application Load Balancer
 ###############################################################################
 resource "aws_lb" "app_lb" {
-  name               = "animalert-alb"
+  name               = "my-app-lb"
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb_sg.id]
-  subnets            = local.public_subnet_ids
+  subnets            = var.public_subnets
 
   access_logs {
     bucket  = aws_s3_bucket.logs.bucket
@@ -223,26 +131,22 @@ resource "aws_lb" "app_lb" {
 }
 
 resource "aws_lb_target_group" "app_tg" {
-  name        = "animalert-tg"
-  port        = 3000
+  name        = "my-app-tg"
+  port        = 80
   protocol    = "HTTP"
-  vpc_id      = aws_vpc.main.id
-  target_type = "ip"
+  vpc_id      = var.vpc_id
+  target_type = "ip"  # For Fargate
 
   health_check {
-    path                = "/"
-    interval            = 30
-    healthy_threshold   = 2
-    unhealthy_threshold = 3
+    path     = "/"
+    interval = 30
   }
 }
 
-resource "aws_lb_listener" "app_https_listener" {
+resource "aws_lb_listener" "app_http_listener" {
   load_balancer_arn = aws_lb.app_lb.arn
-  port              = 443
-  protocol          = "HTTPS"
-  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
-  certificate_arn   = var.alb_certificate_arn
+  port              = 80
+  protocol          = "HTTP"
 
   default_action {
     type             = "forward"
@@ -251,19 +155,18 @@ resource "aws_lb_listener" "app_https_listener" {
 }
 
 ###############################################################################
-# 7. ECS Cluster
+# 6. ECS Cluster (Fargate)
 ###############################################################################
 resource "aws_ecs_cluster" "main" {
   name = "animalert-ecs-cluster"
 }
 
 ###############################################################################
-# 8. IAM Roles – execution, task, infrastructure (least‑privilege)
+# 7. IAM Roles for ECS Tasks
 ###############################################################################
-# a) Execution role – ECS agent pulls images & writes logs
-###############################################################################
-# Trust policy
-data "aws_iam_policy_document" "ecs_task_execution_assume_role" {
+## a) Execution Role (pull images, push logs)
+
+data "aws_iam_policy_document" "ecs_task_execution_assume_role_policy" {
   statement {
     actions = ["sts:AssumeRole"]
     principals {
@@ -275,43 +178,17 @@ data "aws_iam_policy_document" "ecs_task_execution_assume_role" {
 
 resource "aws_iam_role" "ecs_task_execution_role" {
   name               = "ecsTaskExecutionRole"
-  assume_role_policy = data.aws_iam_policy_document.ecs_task_execution_assume_role.json
+  assume_role_policy = data.aws_iam_policy_document.ecs_task_execution_assume_role_policy.json
 }
 
-# Least‑privilege execution policy (pull ECR & write logs)
-data "aws_iam_policy_document" "ecs_task_execution_policy" {
-  statement {
-    sid       = "ECRReadOnly"
-    actions   = [
-      "ecr:GetDownloadUrlForLayer",
-      "ecr:BatchGetImage",
-      "ecr:BatchCheckLayerAvailability",
-      "ecr:GetAuthorizationToken"
-    ]
-    resources = ["*"]
-  }
-  statement {
-    sid       = "WriteLogs"
-    actions   = ["logs:CreateLogStream", "logs:PutLogEvents", "logs:CreateLogGroup"]
-    resources = ["arn:aws:logs:*:*:*"]
-  }
-}
-
-resource "aws_iam_policy" "ecs_task_execution_inline" {
-  name   = "ecsTaskExecutionMinimal"
-  policy = data.aws_iam_policy_document.ecs_task_execution_policy.json
-}
-
-resource "aws_iam_role_policy_attachment" "ecs_task_execution_attach" {
+resource "aws_iam_role_policy_attachment" "execution_role_attachment" {
   role       = aws_iam_role.ecs_task_execution_role.name
-  policy_arn = aws_iam_policy.ecs_task_execution_inline.arn
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-###############################################################################
-# b) Task role – app needs S3 object R/W
-###############################################################################
-# Trust
-data "aws_iam_policy_document" "ecs_task_role_trust" {
+## b) Task Role (app logic access to S3 etc.)
+
+data "aws_iam_policy_document" "ecs_task_role_assume_role_policy" {
   statement {
     actions = ["sts:AssumeRole"]
     principals {
@@ -323,38 +200,36 @@ data "aws_iam_policy_document" "ecs_task_role_trust" {
 
 resource "aws_iam_role" "ecs_task_role" {
   name               = "ecsTaskRole"
-  assume_role_policy = data.aws_iam_policy_document.ecs_task_role_trust.json
+  assume_role_policy = data.aws_iam_policy_document.ecs_task_role_assume_role_policy.json
 }
 
-# Inline policy to access S3 buckets
-resource "aws_iam_policy" "ecs_task_s3" {
-  name   = "ecsTaskS3Access"
-  policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [
-      {
-        Sid      = "S3RW",
-        Effect   = "Allow",
-        Action   = ["s3:GetObject", "s3:PutObject"],
-        Resource = [
-          "${aws_s3_bucket.images.arn}/*",
-          "${aws_s3_bucket.logs.arn}/*",
-          "${aws_s3_bucket.backups.arn}/*"
-        ]
-      }
+data "aws_iam_policy_document" "ecs_task_s3_policy_doc" {
+  statement {
+    sid = "AllowS3Access"
+    actions = ["s3:GetObject", "s3:PutObject"]
+    resources = [
+      "${aws_s3_bucket.images.arn}/*",
+      "${aws_s3_bucket.logs.arn}/*",
+      "${aws_s3_bucket.backups.arn}/*"
     ]
-  })
+  }
 }
 
-resource "aws_iam_role_policy_attachment" "ecs_task_s3_attach" {
+resource "aws_iam_policy" "ecs_task_s3_policy" {
+  name        = "ecsTaskS3Policy"
+  description = "Allow ECS tasks to read/write objects in S3"
+  policy      = data.aws_iam_policy_document.ecs_task_s3_policy_doc.json
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_task_s3_policy_attachment" {
   role       = aws_iam_role.ecs_task_role.name
-  policy_arn = aws_iam_policy.ecs_task_s3.arn
+  policy_arn = aws_iam_policy.ecs_task_s3_policy.arn
 }
 
 ###############################################################################
-# c) Infrastructure role – managed EBS volume lifecycle
+# 8. IAM Infrastructure Role for Managed EBS Volumes
 ###############################################################################
-data "aws_iam_policy_document" "ecs_infra_trust" {
+data "aws_iam_policy_document" "ecs_infra_assume_role" {
   statement {
     actions = ["sts:AssumeRole"]
     principals {
@@ -366,19 +241,29 @@ data "aws_iam_policy_document" "ecs_infra_trust" {
 
 resource "aws_iam_role" "ecs_infra_role" {
   name               = "ecsInfrastructureRole"
-  assume_role_policy = data.aws_iam_policy_document.ecs_infra_trust.json
+  assume_role_policy = data.aws_iam_policy_document.ecs_infra_assume_role.json
 }
 
-resource "aws_iam_role_policy_attachment" "ecs_infra_attach" {
+resource "aws_iam_role_policy_attachment" "ecs_infra_role_volumes" {
   role       = aws_iam_role.ecs_infra_role.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSInfrastructureRolePolicyForVolumes"
 }
 
 ###############################################################################
-# ... (IAM blocks remain unchanged) ...
+# 9. CloudWatch Log Groups (one‑off resources so they exist before tasks run)
+###############################################################################
+resource "aws_cloudwatch_log_group" "web_app_lg" {
+  name              = "/ecs/web-app"
+  retention_in_days = 7
+}
+
+resource "aws_cloudwatch_log_group" "db_lg" {
+  name              = "/ecs/db"
+  retention_in_days = 7
+}
 
 ###############################################################################
-# 9. ECS Task Definition – app exposes port 3000
+# 10. ECS Task Definition (Web App + Postgres, with configure_at_launch volume)
 ###############################################################################
 resource "aws_ecs_task_definition" "web_app_task" {
   family                   = "animalert-web-app-task"
@@ -390,71 +275,75 @@ resource "aws_ecs_task_definition" "web_app_task" {
   execution_role_arn = aws_iam_role.ecs_task_execution_role.arn
   task_role_arn      = aws_iam_role.ecs_task_role.arn
 
-  # Placeholder volume – actual managed EBS attached at service
+  # The volume will be created by the ECS service when it starts the task
   volume {
-    name                 = "db-volume"
-    configured_at_launch = true
+    name                = "db-volume"
+    configure_at_launch = true
   }
 
-  container_definitions = jsonencode([
-    {
-      name         = "web-app",
-      image        = "${aws_ecr_repository.web_app_repo.repository_url}:latest",
-      essential    = true,
-      portMappings = [{ containerPort = 3000, protocol = "tcp" }],
-      environment  = [
-        { name = "DB_HOST",     value = "127.0.0.1" },
-        { name = "DB_NAME",     value = "my_app_db" },
-        { name = "DB_USER",     value = "myuser" },
-        { name = "DB_PASSWORD", value = "super-secret" }
-      ],
-      logConfiguration = {
-        logDriver = "awslogs",
-        options = {
-          awslogs-group         = "/ecs/web-app",
-          awslogs-region        = var.aws_region,
-          awslogs-stream-prefix = "webapp"
-        }
-      }
-    },
-    {
-      name      = "database",
-      image     = "postgres:14",
-      essential = true,
-      environment = [
-        { name = "POSTGRES_DB",       value = "my_app_db" },
-        { name = "POSTGRES_USER",     value = "myuser" },
-        { name = "POSTGRES_PASSWORD", value = "super-secret" }
-      ],
-      mountPoints = [
-        { sourceVolume = "db-volume", containerPath = "/var/lib/postgresql/data" }
-      ],
-      logConfiguration = {
-        logDriver = "awslogs",
-        options = {
-          awslogs-group         = "/ecs/db",
-          awslogs-region        = var.aws_region,
-          awslogs-stream-prefix = "db"
-        }
+  container_definitions = <<DEFINITION
+[
+  {
+    "name": "web-app",
+    "image": "${aws_ecr_repository.web_app_repo.repository_url}:latest",
+    "essential": true,
+    "portMappings": [
+      { "containerPort": 80, "protocol": "tcp" }
+    ],
+    "environment": [
+      { "name": "DB_HOST",     "value": "127.0.0.1" },
+      { "name": "DB_NAME",     "value": "my_app_db" },
+      { "name": "DB_USER",     "value": "myuser" },
+      { "name": "DB_PASSWORD", "value": "super-secret" }
+    ],
+    "logConfiguration": {
+      "logDriver": "awslogs",
+      "options": {
+        "awslogs-group": "/ecs/web-app",
+        "awslogs-region": "${var.aws_region}",
+        "awslogs-stream-prefix": "webapp"
       }
     }
-  ])
+  },
+  {
+    "name": "database",
+    "image": "postgres:14",
+    "essential": true,
+    "environment": [
+      { "name": "POSTGRES_DB",       "value": "my_app_db" },
+      { "name": "POSTGRES_USER",     "value": "myuser" },
+      { "name": "POSTGRES_PASSWORD", "value": "super-secret" }
+    ],
+    "mountPoints": [
+      { "sourceVolume": "db-volume", "containerPath": "/var/lib/postgresql/data" }
+    ],
+    "logConfiguration": {
+      "logDriver": "awslogs",
+      "options": {
+        "awslogs-group": "/ecs/db",
+        "awslogs-region": "${var.aws_region}",
+        "awslogs-stream-prefix": "db"
+      }
+    }
+  }
+]
+DEFINITION
 }
 
 ###############################################################################
-# 10. ECS Service – attach managed EBS & run in private subnets
+# 11. ECS Service (Fargate behind ALB) + Managed EBS Volume
 ###############################################################################
 resource "aws_ecs_service" "web_app_service" {
-  name                    = "animalert-web-app-service"
-  cluster                 = aws_ecs_cluster.main.arn
-  launch_type             = "FARGATE"
-  platform_version        = "1.4.0"
-  desired_count           = 2
-  task_definition         = aws_ecs_task_definition.web_app_task.arn
-  enable_ecs_managed_tags = true
+  name             = "animalert-web-app-service"
+  cluster          = aws_ecs_cluster.main.arn
+  launch_type      = "FARGATE"
+  desired_count    = 2
+  platform_version = "1.4.0" # 1.4+ required for EBS on Fargate
+
+  task_definition = aws_ecs_task_definition.web_app_task.arn
 
   network_configuration {
-    subnets          = local.private_subnet_ids
+    subnets          = var.private_subnets
     security_groups  = [aws_security_group.ecs_service_sg.id]
     assign_public_ip = false
   }
@@ -462,31 +351,30 @@ resource "aws_ecs_service" "web_app_service" {
   load_balancer {
     target_group_arn = aws_lb_target_group.app_tg.arn
     container_name   = "web-app"
-    container_port   = 3000
+    container_port   = 80
   }
 
+  # New: service‑managed EBS volume that backs /var/lib/postgresql/data
   volume_configuration {
     name = "db-volume"
+
     managed_ebs_volume {
-      role_arn        = aws_iam_role.ecs_infra_role.arn
-      encrypted       = true
-      volume_type     = "gp3"
-      size_in_gb      = var.ebs_volume_size_gb
-      iops            = 3000
-      throughput      = 125
-      filesystem_type = "ext4"
+      role_arn         = aws_iam_role.ecs_infra_role.arn
+      encrypted        = true
+      volume_type      = "gp3"
+      size_in_gib      = 20
+      iops             = 3000
+      throughput       = 125
+      file_system_type = "ext4"
+      delete_on_termination = true
     }
   }
 
-  depends_on = [aws_lb_listener.app_https_listener]
+  depends_on = [
+    aws_lb_listener.app_http_listener
+  ]
 }
 
 ###############################################################################
-# 11. CloudWatch Log Groups (already defined above)
+# END OF FILE – EFS & Backup resources have been fully removed
 ###############################################################################
-
-###############################################################################
-# 12. Outputs
-###############################################################################
-output "alb_dns_name"  { value = aws_lb.app_lb.dns_name }
-output "alb_https_url" { value = "https://${aws_lb.app_lb.dns_name}" }
