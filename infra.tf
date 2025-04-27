@@ -23,10 +23,6 @@ variable "aws_region" {
   default = "eu-central-1"
 }
 
-variable "acm_certificate_arn" {
-  description = "ACM certificate ARN for the HTTPS listener"
-  type        = string
-}
 
 variable "tls_domain" {
   description = "Primary domain (or wildcard) to match an existing ACM certificate"
