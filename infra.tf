@@ -266,7 +266,10 @@ resource "aws_ecs_cluster" "main" {
 data "aws_iam_policy_document" "ecs_task_execution_assume_role" {
   statement {
     actions = ["sts:AssumeRole"]
-    principals { type = "Service" identifiers = ["ecs-tasks.amazonaws.com"] }
+    principals {
+      type        = "Service"
+      identifiers = ["ecs-tasks.amazonaws.com"]
+    }
   }
 }
 
@@ -311,7 +314,10 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution_attach" {
 data "aws_iam_policy_document" "ecs_task_role_trust" {
   statement {
     actions = ["sts:AssumeRole"]
-    principals { type = "Service" identifiers = ["ecs-tasks.amazonaws.com"] }
+    principals {
+      type        = "Service"
+      identifiers = ["ecs-tasks.amazonaws.com"]
+    }
   }
 }
 
@@ -351,7 +357,10 @@ resource "aws_iam_role_policy_attachment" "ecs_task_s3_attach" {
 data "aws_iam_policy_document" "ecs_infra_trust" {
   statement {
     actions = ["sts:AssumeRole"]
-    principals { type = "Service" identifiers = ["ecs.amazonaws.com"] }
+    principals {
+      type        = "Service"
+      identifiers = ["ecs.amazonaws.com"]
+    }
   }
 }
 
