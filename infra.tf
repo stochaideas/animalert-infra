@@ -268,4 +268,110 @@ resource "aws_ecs_cluster" "main" {
 resource "aws_ecs_task_definition" "web_app_task" {
   family                   = "animalert-web-app-task"
   network_mode             = "awsvpc"
-  requires_compatibilities = ["F
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = 256
+  memory                   = 512
+
+  execution_role_arn = aws_iam_role.ecs_task_execution_role.arn
+  task_role_arn      = aws_iam_role.ecs_task_role.arn
+
+  # Placeholder volume – actual managed EBS attached at service
+  volume {
+    name                 = "db-volume"
+    configured_at_launch = true
+  }
+
+  container_definitions = jsonencode([
+    {
+      name         = "web-app",
+      image        = "${aws_ecr_repository.web_app_repo.repository_url}:latest",
+      essential    = true,
+      portMappings = [{ containerPort = 3000, protocol = "tcp" }],
+      environment  = [
+        { name = "DB_HOST",     value = "127.0.0.1" },
+        { name = "DB_NAME",     value = "my_app_db" },
+        { name = "DB_USER",     value = "myuser" },
+        { name = "DB_PASSWORD", value = "super-secret" }
+      ],
+      logConfiguration = {
+        logDriver = "awslogs",
+        options = {
+          awslogs-group         = "/ecs/web-app",
+          awslogs-region        = var.aws_region,
+          awslogs-stream-prefix = "webapp"
+        }
+      }
+    },
+    {
+      name      = "database",
+      image     = "postgres:14",
+      essential = true,
+      environment = [
+        { name = "POSTGRES_DB",       value = "my_app_db" },
+        { name = "POSTGRES_USER",     value = "myuser" },
+        { name = "POSTGRES_PASSWORD", value = "super-secret" }
+      ],
+      mountPoints = [
+        { sourceVolume = "db-volume", containerPath = "/var/lib/postgresql/data" }
+      ],
+      logConfiguration = {
+        logDriver = "awslogs",
+        options = {
+          awslogs-group         = "/ecs/db",
+          awslogs-region        = var.aws_region,
+          awslogs-stream-prefix = "db"
+        }
+      }
+    }
+  ])
+}
+
+###############################################################################
+# 10. ECS Service – attach managed EBS & run in private subnets
+###############################################################################
+resource "aws_ecs_service" "web_app_service" {
+  name                    = "animalert-web-app-service"
+  cluster                 = aws_ecs_cluster.main.arn
+  launch_type             = "FARGATE"
+  platform_version        = "1.4.0"
+  desired_count           = 2
+  task_definition         = aws_ecs_task_definition.web_app_task.arn
+  enable_ecs_managed_tags = true
+
+  network_configuration {
+    subnets          = local.private_subnet_ids
+    security_groups  = [aws_security_group.ecs_service_sg.id]
+    assign_public_ip = false
+  }
+
+  load_balancer {
+    target_group_arn = aws_lb_target_group.app_tg.arn
+    container_name   = "web-app"
+    container_port   = 3000
+  }
+
+  volume_configuration {
+    name = "db-volume"
+    managed_ebs_volume {
+      role_arn        = aws_iam_role.ecs_infra_role.arn
+      encrypted       = true
+      volume_type     = "gp3"
+      size_in_gb      = var.ebs_volume_size_gb
+      iops            = 3000
+      throughput      = 125
+      filesystem_type = "ext4"
+    }
+  }
+
+  depends_on = [aws_lb_listener.app_https_listener]
+}
+
+###############################################################################
+# 11. CloudWatch Log Groups (already defined above)
+###############################################################################
+
+###############################################################################
+# 12. Outputs
+###############################################################################
+output "alb_dns_name"  { value = aws_lb.app_lb.dns_name }
+output "alb_https_url" { value = "https://${aws_lb.app_lb.dns_name}" }
