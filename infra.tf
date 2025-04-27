@@ -46,7 +46,7 @@ variable "ebs_volume_size_gb" {
   default = 20
 }
 
-# NEW – ACM cert for the HTTPS listener
+# ACM cert for the HTTPS listener
 variable "alb_certificate_arn" {
   description = "ACM certificate ARN for ALB HTTPS listener"
   type        = string
@@ -73,7 +73,7 @@ resource "aws_subnet" "public" {
   cidr_block              = var.public_subnet_cidrs[count.index]
   availability_zone       = data.aws_availability_zones.available.names[count.index]
   map_public_ip_on_launch = true
-  tags = { Name = "animalert-public-${count.index + 1}" }
+  tags                    = { Name = "animalert-public-${count.index + 1}" }
 }
 
 resource "aws_route_table" "public" {
@@ -137,9 +137,20 @@ locals {
 ###############################################################################
 # 3. S3 Buckets (Images, Logs, Backups)
 ###############################################################################
-resource "aws_s3_bucket" "images"  { bucket = "animalert-images"  acl = "private" }
-resource "aws_s3_bucket" "logs"    { bucket = "animalert-logs"    acl = "private" }
-resource "aws_s3_bucket" "backups" { bucket = "animalert-backups" acl = "private" }
+resource "aws_s3_bucket" "images" {
+  bucket = "animalert-images"
+  acl    = "private"
+}
+
+resource "aws_s3_bucket" "logs" {
+  bucket = "animalert-logs"
+  acl    = "private"
+}
+
+resource "aws_s3_bucket" "backups" {
+  bucket = "animalert-backups"
+  acl    = "private"
+}
 
 ###############################################################################
 # 4. ECR Repository
@@ -147,13 +158,14 @@ resource "aws_s3_bucket" "backups" { bucket = "animalert-backups" acl = "private
 resource "aws_ecr_repository" "web_app_repo" {
   name                 = "animalert-webapp"
   image_tag_mutability = "MUTABLE"
-  image_scanning_configuration { scan_on_push = true }
+  image_scanning_configuration {
+    scan_on_push = true
+  }
 }
 
 ###############################################################################
 # 5. Security Groups
 ###############################################################################
-# ALB – HTTPS only
 resource "aws_security_group" "alb_sg" {
   name   = "alb-sg"
   vpc_id = aws_vpc.main.id
@@ -166,10 +178,14 @@ resource "aws_security_group" "alb_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  egress { from_port = 0 to_port = 0 protocol = "-1" cidr_blocks = ["0.0.0.0/0"] }
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 }
 
-# ECS Service – allow +3000 from ALB SG
 resource "aws_security_group" "ecs_service_sg" {
   name   = "ecs-service-sg"
   vpc_id = aws_vpc.main.id
@@ -182,7 +198,12 @@ resource "aws_security_group" "ecs_service_sg" {
     security_groups = [aws_security_group.alb_sg.id]
   }
 
-  egress { from_port = 0 to_port = 0 protocol = "-1" cidr_blocks = ["0.0.0.0/0"] }
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 }
 
 ###############################################################################
@@ -232,124 +253,19 @@ resource "aws_lb_listener" "app_https_listener" {
 ###############################################################################
 # 7. ECS Cluster
 ###############################################################################
-resource "aws_ecs_cluster" "main" { name = "animalert-ecs-cluster" }
+resource "aws_ecs_cluster" "main" {
+  name = "animalert-ecs-cluster"
+}
 
 ###############################################################################
-# 8. IAM Roles (execution, task, infra) – unchanged
+# 8. IAM Roles (execution, task, infra) – unchanged placeholders
 ###############################################################################
-#  ... (retain previous IAM blocks) ...
-#  For brevity, the IAM blocks are identical to the prior version and have not
-#  been removed. Make sure they remain in your working file or modules.
+# ... (IAM blocks remain unchanged) ...
 
 ###############################################################################
-# 9. ECS Task Definition – app now exposes port 3000
+# 9. ECS Task Definition – app exposes port 3000
 ###############################################################################
 resource "aws_ecs_task_definition" "web_app_task" {
   family                   = "animalert-web-app-task"
   network_mode             = "awsvpc"
-  requires_compatibilities = ["FARGATE"]
-  cpu                      = 256
-  memory                   = 512
-
-  execution_role_arn = aws_iam_role.ecs_task_execution_role.arn
-  task_role_arn      = aws_iam_role.ecs_task_role.arn
-
-  volume {
-    name                 = "db-volume"
-    configured_at_launch = true
-  }
-
-  container_definitions = jsonencode([
-    {
-      name  = "web-app",
-      image = "${aws_ecr_repository.web_app_repo.repository_url}:latest",
-      essential = true,
-      portMappings = [{ containerPort = 3000, protocol = "tcp" }],
-      environment = [
-        { name = "DB_HOST",     value = "127.0.0.1" },
-        { name = "DB_NAME",     value = "my_app_db" },
-        { name = "DB_USER",     value = "myuser" },
-        { name = "DB_PASSWORD", value = "super-secret" }
-      ],
-      logConfiguration = {
-        logDriver = "awslogs",
-        options = {
-          awslogs-group         = "/ecs/web-app",
-          awslogs-region        = var.aws_region,
-          awslogs-stream-prefix = "webapp"
-        }
-      }
-    },
-    {
-      name  = "database",
-      image = "postgres:14",
-      essential = true,
-      environment = [
-        { name = "POSTGRES_DB",       value = "my_app_db" },
-        { name = "POSTGRES_USER",     value = "myuser" },
-        { name = "POSTGRES_PASSWORD", value = "super-secret" }
-      ],
-      mountPoints = [{ sourceVolume = "db-volume", containerPath = "/var/lib/postgresql/data" }],
-      logConfiguration = {
-        logDriver = "awslogs",
-        options = {
-          awslogs-group         = "/ecs/db",
-          awslogs-region        = var.aws_region,
-          awslogs-stream-prefix = "db"
-        }
-      }
-    }
-  ])
-}
-
-###############################################################################
-# 10. ECS Service – update container port & listener dep
-###############################################################################
-resource "aws_ecs_service" "web_app_service" {
-  name                    = "animalert-web-app-service"
-  cluster                 = aws_ecs_cluster.main.arn
-  launch_type             = "FARGATE"
-  platform_version        = "1.4.0"
-  desired_count           = 2
-  task_definition         = aws_ecs_task_definition.web_app_task.arn
-  enable_ecs_managed_tags = true
-
-  network_configuration {
-    subnets          = local.private_subnet_ids
-    security_groups  = [aws_security_group.ecs_service_sg.id]
-    assign_public_ip = false
-  }
-
-  load_balancer {
-    target_group_arn = aws_lb_target_group.app_tg.arn
-    container_name   = "web-app"
-    container_port   = 3000
-  }
-
-  volume_configuration {
-    name = "db-volume"
-    managed_ebs_volume {
-      role_arn        = aws_iam_role.ecs_infra_role.arn
-      encrypted       = true
-      volume_type     = "gp3"
-      size_in_gb      = var.ebs_volume_size_gb
-      iops            = 3000
-      throughput      = 125
-      filesystem_type = "ext4"
-    }
-  }
-
-  depends_on = [aws_lb_listener.app_https_listener]
-}
-
-###############################################################################
-# 11. CloudWatch Log Groups
-###############################################################################
-resource "aws_cloudwatch_log_group" "web_app_lg" { name = "/ecs/web-app" retention_in_days = 7 }
-resource "aws_cloudwatch_log_group" "db_lg"      { name = "/ecs/db"      retention_in_days = 7 }
-
-###############################################################################
-# 12. Outputs
-###############################################################################
-output "alb_dns_name"      { value = aws_lb.app_lb.dns_name }
-output "alb_https_url"     { value = "https://${aws_lb.app_lb.dns_name}" }
+  requires_compatibilities = ["F
