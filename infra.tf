@@ -93,7 +93,7 @@ resource "aws_route_table_association" "public" {
 
 resource "aws_eip" "nat" {
   count = length(aws_subnet.public)
-  vpc   = true
+  domain = "vpc"
   tags  = { Name = "animalert-nat-eip-${count.index + 1}" }
 }
 
@@ -258,7 +258,113 @@ resource "aws_ecs_cluster" "main" {
 }
 
 ###############################################################################
-# 8. IAM Roles (execution, task, infra) – unchanged placeholders
+# 8. IAM Roles – execution, task, infrastructure (least‑privilege)
+###############################################################################
+# a) Execution role – ECS agent pulls images & writes logs
+###############################################################################
+# Trust policy
+data "aws_iam_policy_document" "ecs_task_execution_assume_role" {
+  statement {
+    actions = ["sts:AssumeRole"]
+    principals { type = "Service" identifiers = ["ecs-tasks.amazonaws.com"] }
+  }
+}
+
+resource "aws_iam_role" "ecs_task_execution_role" {
+  name               = "ecsTaskExecutionRole"
+  assume_role_policy = data.aws_iam_policy_document.ecs_task_execution_assume_role.json
+}
+
+# Least‑privilege execution policy (pull ECR & write logs)
+data "aws_iam_policy_document" "ecs_task_execution_policy" {
+  statement {
+    sid       = "ECRReadOnly"
+    actions   = [
+      "ecr:GetDownloadUrlForLayer",
+      "ecr:BatchGetImage",
+      "ecr:BatchCheckLayerAvailability",
+      "ecr:GetAuthorizationToken"
+    ]
+    resources = ["*"]
+  }
+  statement {
+    sid       = "WriteLogs"
+    actions   = ["logs:CreateLogStream", "logs:PutLogEvents", "logs:CreateLogGroup"]
+    resources = ["arn:aws:logs:*:*:*"]
+  }
+}
+
+resource "aws_iam_policy" "ecs_task_execution_inline" {
+  name   = "ecsTaskExecutionMinimal"
+  policy = data.aws_iam_policy_document.ecs_task_execution_policy.json
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_task_execution_attach" {
+  role       = aws_iam_role.ecs_task_execution_role.name
+  policy_arn = aws_iam_policy.ecs_task_execution_inline.arn
+}
+
+###############################################################################
+# b) Task role – app needs S3 object R/W
+###############################################################################
+# Trust
+data "aws_iam_policy_document" "ecs_task_role_trust" {
+  statement {
+    actions = ["sts:AssumeRole"]
+    principals { type = "Service" identifiers = ["ecs-tasks.amazonaws.com"] }
+  }
+}
+
+resource "aws_iam_role" "ecs_task_role" {
+  name               = "ecsTaskRole"
+  assume_role_policy = data.aws_iam_policy_document.ecs_task_role_trust.json
+}
+
+# Inline policy to access S3 buckets
+resource "aws_iam_policy" "ecs_task_s3" {
+  name   = "ecsTaskS3Access"
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Sid      = "S3RW",
+        Effect   = "Allow",
+        Action   = ["s3:GetObject", "s3:PutObject"],
+        Resource = [
+          "${aws_s3_bucket.images.arn}/*",
+          "${aws_s3_bucket.logs.arn}/*",
+          "${aws_s3_bucket.backups.arn}/*"
+        ]
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_task_s3_attach" {
+  role       = aws_iam_role.ecs_task_role.name
+  policy_arn = aws_iam_policy.ecs_task_s3.arn
+}
+
+###############################################################################
+# c) Infrastructure role – managed EBS volume lifecycle
+###############################################################################
+data "aws_iam_policy_document" "ecs_infra_trust" {
+  statement {
+    actions = ["sts:AssumeRole"]
+    principals { type = "Service" identifiers = ["ecs.amazonaws.com"] }
+  }
+}
+
+resource "aws_iam_role" "ecs_infra_role" {
+  name               = "ecsInfrastructureRole"
+  assume_role_policy = data.aws_iam_policy_document.ecs_infra_trust.json
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_infra_attach" {
+  role       = aws_iam_role.ecs_infra_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSInfrastructureRolePolicyForVolumes"
+}
+
 ###############################################################################
 # ... (IAM blocks remain unchanged) ...
 
