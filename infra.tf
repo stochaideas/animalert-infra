@@ -5,14 +5,14 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.40"
+      version = "~> 5.40" # 5.33+ supports managed EBS on Fargate
     }
   }
   required_version = ">= 1.6"
 }
 
 ###############################################################################
-# 1. Providers and Variables
+# 1. Provider and Variables
 ###############################################################################
 provider "aws" {
   region = var.aws_region
@@ -31,7 +31,7 @@ variable "acm_certificate_arn" {
 ###############################################################################
 # 2. Networking – NEW VPC, Subnets, NAT
 ###############################################################################
-# Availability Zones
+# Availability Zones
 
 data "aws_availability_zones" "available" {}
 
@@ -40,9 +40,7 @@ resource "aws_vpc" "main" {
   cidr_block           = "10.0.0.0/16"
   enable_dns_support   = true
   enable_dns_hostnames = true
-  tags = {
-    Name = "animalert-vpc"
-  }
+  tags = { Name = "animalert-vpc" }
 }
 
 # Internet Gateway
@@ -51,19 +49,17 @@ resource "aws_internet_gateway" "igw" {
   tags   = { Name = "animalert-igw" }
 }
 
-# Public Subnets (for ALB + NAT)
+# Public Subnets (for ALB & NAT)
 resource "aws_subnet" "public" {
   count                   = 2
   vpc_id                  = aws_vpc.main.id
   cidr_block              = cidrsubnet(aws_vpc.main.cidr_block, 8, count.index + 1) # 10.0.1.0/24, 10.0.2.0/24
   map_public_ip_on_launch = true
   availability_zone       = data.aws_availability_zones.available.names[count.index]
-  tags = {
-    Name = "animalert-public-${count.index}"
-  }
+  tags = { Name = "animalert-public-${count.index}" }
 }
 
-# Public Route Table → IGW
+# Public Route Table
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
   route {
@@ -71,16 +67,15 @@ resource "aws_route_table" "public" {
     gateway_id = aws_internet_gateway.igw.id
   }
 }
+
 resource "aws_route_table_association" "public" {
   count          = 2
   subnet_id      = aws_subnet.public[count.index].id
   route_table_id = aws_route_table.public.id
 }
 
-# NAT Gateway (one per public-a)
-resource "aws_eip" "nat" {
-  domain = "vpc"
-}
+# NAT Gateway (one shared)
+resource "aws_eip" "nat" { domain = "vpc" }
 
 resource "aws_nat_gateway" "nat" {
   allocation_id = aws_eip.nat.id
@@ -94,12 +89,10 @@ resource "aws_subnet" "private" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = cidrsubnet(aws_vpc.main.cidr_block, 8, count.index + 11) # 10.0.11.0/24, 10.0.12.0/24
   availability_zone = data.aws_availability_zones.available.names[count.index]
-  tags = {
-    Name = "animalert-private-${count.index}"
-  }
+  tags = { Name = "animalert-private-${count.index}" }
 }
 
-# Private Route Table → NAT
+# Private Route Table
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.main.id
   route {
@@ -107,6 +100,7 @@ resource "aws_route_table" "private" {
     nat_gateway_id = aws_nat_gateway.nat.id
   }
 }
+
 resource "aws_route_table_association" "private" {
   count          = 2
   subnet_id      = aws_subnet.private[count.index].id
@@ -135,7 +129,7 @@ resource "aws_ecr_repository" "web_app_repo" {
 }
 
 ###############################################################################
-# 5. Security Groups – ALB (443) & ECS (3000)
+# 5. Security Groups – ALB (443) & ECS (3000)
 ###############################################################################
 resource "aws_security_group" "alb_sg" {
   name   = "alb-sg"
@@ -178,7 +172,7 @@ resource "aws_security_group" "ecs_service_sg" {
 }
 
 ###############################################################################
-# 6. Application Load Balancer & Target Group (port 3000)
+# 6. Application Load Balancer & HTTPS Listener
 ###############################################################################
 resource "aws_lb" "app_lb" {
   name               = "my-app-lb"
@@ -207,7 +201,6 @@ resource "aws_lb_target_group" "app_tg" {
   }
 }
 
-# HTTPS Listener on 443
 resource "aws_lb_listener" "https" {
   load_balancer_arn = aws_lb.app_lb.arn
   port              = 443
@@ -231,9 +224,89 @@ resource "aws_ecs_cluster" "main" {
 ###############################################################################
 # 8. IAM Roles – Execution, Task, Infrastructure
 ###############################################################################
-# (UNCHANGED FROM PREVIOUS VERSION – omitted here for brevity)
-#  -> Include ecs_task_execution_role, ecs_task_role, ecs_infra_role resources as before.
-${split("# IAM-PLACEHOLDER", "# IAM-PLACEHOLDER")[0]}
+# --- a) Execution Role -------------------------------------------------------
+
+data "aws_iam_policy_document" "ecs_task_execution_assume_role" {
+  statement {
+    actions   = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["ecs-tasks.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "ecs_task_execution_role" {
+  name               = "ecsTaskExecutionRole"
+  assume_role_policy = data.aws_iam_policy_document.ecs_task_execution_assume_role.json
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_task_execution_policy" {
+  role       = aws_iam_role.ecs_task_execution_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}
+
+# --- b) Task Role -----------------------------------------------------------
+
+data "aws_iam_policy_document" "ecs_task_role_assume_role" {
+  statement {
+    actions   = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["ecs-tasks.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "ecs_task_role" {
+  name               = "ecsTaskRole"
+  assume_role_policy = data.aws_iam_policy_document.ecs_task_role_assume_role.json
+}
+
+data "aws_iam_policy_document" "ecs_task_s3_policy_doc" {
+  statement {
+    sid       = "AllowS3Access"
+    actions   = ["s3:GetObject", "s3:PutObject"]
+    resources = [
+      "${aws_s3_bucket.images.arn}/*",
+      "${aws_s3_bucket.logs.arn}/*",
+      "${aws_s3_bucket.backups.arn}/*"
+    ]
+  }
+}
+
+resource "aws_iam_policy" "ecs_task_s3_policy" {
+  name   = "ecsTaskS3Policy"
+  policy = data.aws_iam_policy_document.ecs_task_s3_policy_doc.json
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_task_s3_policy_attachment" {
+  role       = aws_iam_role.ecs_task_role.name
+  policy_arn = aws_iam_policy.ecs_task_s3_policy.arn
+}
+
+# --- c) Infrastructure Role (managed EBS volumes) --------------------------
+
+data "aws_iam_policy_document" "ecs_infra_assume_role" {
+  statement {
+    actions   = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["ecs.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "ecs_infra_role" {
+  name               = "ecsInfrastructureRole"
+  assume_role_policy = data.aws_iam_policy_document.ecs_infra_assume_role.json
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_infra_volumes_attachment" {
+  role       = aws_iam_role.ecs_infra_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSInfrastructureRolePolicyForVolumes"
+}
+
 ###############################################################################
 # 9. CloudWatch Log Groups
 ###############################################################################
