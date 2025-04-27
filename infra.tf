@@ -5,9 +5,10 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.40" # make sure you have 5.33+ for managed EBS‑on‑Fargate
+      version = "~> 5.40" # 5.33+ introduces managed EBS on Fargate
     }
   }
+  required_version = ">= 1.6"
 }
 
 ###############################################################################
@@ -44,25 +45,22 @@ variable "private_subnets" {
 }
 
 ###############################################################################
-# 2. S3 Buckets (Images, Logs, Backups)
+# 2. S3 Buckets (Images, Logs, Backups) – no deprecated ACL attribute
 ###############################################################################
 resource "aws_s3_bucket" "images" {
   bucket = "animalert-images"  # CHANGE to your unique bucket name
-  acl    = "private"
 }
 
 resource "aws_s3_bucket" "logs" {
   bucket = "animalert-logs"    # CHANGE to your unique bucket name
-  acl    = "private"
 }
 
 resource "aws_s3_bucket" "backups" {
   bucket = "animalert-backups" # CHANGE to your unique bucket name
-  acl    = "private"
 }
 
 ###############################################################################
-# 3. ECR Repository (to store the Docker image)
+# 3. ECR Repository
 ###############################################################################
 resource "aws_ecr_repository" "web_app_repo" {
   name                 = "animalert-webapp"
@@ -70,7 +68,7 @@ resource "aws_ecr_repository" "web_app_repo" {
 }
 
 ###############################################################################
-# 4. Networking: Security Groups for ALB and ECS Service
+# 4. Networking: Security Groups for ALB and ECS
 ###############################################################################
 resource "aws_security_group" "alb_sg" {
   name   = "alb-sg"
@@ -85,7 +83,6 @@ resource "aws_security_group" "alb_sg" {
   }
 
   egress {
-    description = "Allow all out"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
@@ -106,7 +103,6 @@ resource "aws_security_group" "ecs_service_sg" {
   }
 
   egress {
-    description = "Allow all outbound"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
@@ -115,7 +111,7 @@ resource "aws_security_group" "ecs_service_sg" {
 }
 
 ###############################################################################
-# 5. Application Load Balancer
+# 5. Application Load Balancer (ALB)
 ###############################################################################
 resource "aws_lb" "app_lb" {
   name               = "my-app-lb"
@@ -135,7 +131,7 @@ resource "aws_lb_target_group" "app_tg" {
   port        = 80
   protocol    = "HTTP"
   vpc_id      = var.vpc_id
-  target_type = "ip"  # For Fargate
+  target_type = "ip"  # Fargate uses IP targets
 
   health_check {
     path     = "/"
@@ -162,13 +158,13 @@ resource "aws_ecs_cluster" "main" {
 }
 
 ###############################################################################
-# 7. IAM Roles for ECS Tasks
+# 7. IAM Roles – Execution, Task & Infrastructure
 ###############################################################################
-## a) Execution Role (pull images, push logs)
+## a) Execution Role
 
 data "aws_iam_policy_document" "ecs_task_execution_assume_role_policy" {
   statement {
-    actions = ["sts:AssumeRole"]
+    actions   = ["sts:AssumeRole"]
     principals {
       type        = "Service"
       identifiers = ["ecs-tasks.amazonaws.com"]
@@ -186,11 +182,11 @@ resource "aws_iam_role_policy_attachment" "execution_role_attachment" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-## b) Task Role (app logic access to S3 etc.)
+## b) Task Role
 
 data "aws_iam_policy_document" "ecs_task_role_assume_role_policy" {
   statement {
-    actions = ["sts:AssumeRole"]
+    actions   = ["sts:AssumeRole"]
     principals {
       type        = "Service"
       identifiers = ["ecs-tasks.amazonaws.com"]
@@ -205,8 +201,8 @@ resource "aws_iam_role" "ecs_task_role" {
 
 data "aws_iam_policy_document" "ecs_task_s3_policy_doc" {
   statement {
-    sid = "AllowS3Access"
-    actions = ["s3:GetObject", "s3:PutObject"]
+    sid       = "AllowS3Access"
+    actions   = ["s3:GetObject", "s3:PutObject"]
     resources = [
       "${aws_s3_bucket.images.arn}/*",
       "${aws_s3_bucket.logs.arn}/*",
@@ -216,9 +212,8 @@ data "aws_iam_policy_document" "ecs_task_s3_policy_doc" {
 }
 
 resource "aws_iam_policy" "ecs_task_s3_policy" {
-  name        = "ecsTaskS3Policy"
-  description = "Allow ECS tasks to read/write objects in S3"
-  policy      = data.aws_iam_policy_document.ecs_task_s3_policy_doc.json
+  name   = "ecsTaskS3Policy"
+  policy = data.aws_iam_policy_document.ecs_task_s3_policy_doc.json
 }
 
 resource "aws_iam_role_policy_attachment" "ecs_task_s3_policy_attachment" {
@@ -226,12 +221,11 @@ resource "aws_iam_role_policy_attachment" "ecs_task_s3_policy_attachment" {
   policy_arn = aws_iam_policy.ecs_task_s3_policy.arn
 }
 
-###############################################################################
-# 8. IAM Infrastructure Role for Managed EBS Volumes
-###############################################################################
+## c) Infrastructure Role – Managed EBS
+
 data "aws_iam_policy_document" "ecs_infra_assume_role" {
   statement {
-    actions = ["sts:AssumeRole"]
+    actions   = ["sts:AssumeRole"]
     principals {
       type        = "Service"
       identifiers = ["ecs.amazonaws.com"]
@@ -250,7 +244,7 @@ resource "aws_iam_role_policy_attachment" "ecs_infra_role_volumes" {
 }
 
 ###############################################################################
-# 9. CloudWatch Log Groups (one‑off resources so they exist before tasks run)
+# 8. CloudWatch Log Groups
 ###############################################################################
 resource "aws_cloudwatch_log_group" "web_app_lg" {
   name              = "/ecs/web-app"
@@ -263,7 +257,7 @@ resource "aws_cloudwatch_log_group" "db_lg" {
 }
 
 ###############################################################################
-# 10. ECS Task Definition (Web App + Postgres, with configure_at_launch volume)
+# 9. ECS Task Definition (Web + Postgres) with configure_at_launch volume
 ###############################################################################
 resource "aws_ecs_task_definition" "web_app_task" {
   family                   = "animalert-web-app-task"
@@ -275,7 +269,6 @@ resource "aws_ecs_task_definition" "web_app_task" {
   execution_role_arn = aws_iam_role.ecs_task_execution_role.arn
   task_role_arn      = aws_iam_role.ecs_task_role.arn
 
-  # The volume will be created by the ECS service when it starts the task
   volume {
     name                = "db-volume"
     configure_at_launch = true
@@ -331,14 +324,14 @@ DEFINITION
 }
 
 ###############################################################################
-# 11. ECS Service (Fargate behind ALB) + Managed EBS Volume
+# 10. ECS Service (Fargate behind ALB) with Managed EBS Volume
 ###############################################################################
 resource "aws_ecs_service" "web_app_service" {
   name             = "animalert-web-app-service"
   cluster          = aws_ecs_cluster.main.arn
   launch_type      = "FARGATE"
   desired_count    = 2
-  platform_version = "1.4.0" # 1.4+ required for EBS on Fargate
+  platform_version = "1.4.0" # 1.4+ required for managed EBS
 
   task_definition = aws_ecs_task_definition.web_app_task.arn
 
@@ -354,7 +347,6 @@ resource "aws_ecs_service" "web_app_service" {
     container_port   = 80
   }
 
-  # New: service‑managed EBS volume that backs /var/lib/postgresql/data
   volume_configuration {
     name = "db-volume"
 
@@ -362,19 +354,16 @@ resource "aws_ecs_service" "web_app_service" {
       role_arn         = aws_iam_role.ecs_infra_role.arn
       encrypted        = true
       volume_type      = "gp3"
-      size_in_gib      = 20
+      size_in_gb       = 20
       iops             = 3000
       throughput       = 125
       file_system_type = "ext4"
-      delete_on_termination = true
     }
   }
 
-  depends_on = [
-    aws_lb_listener.app_http_listener
-  ]
+  depends_on = [aws_lb_listener.app_http_listener]
 }
 
 ###############################################################################
-# END OF FILE – EFS & Backup resources have been fully removed
+# END OF FILE
 ###############################################################################
