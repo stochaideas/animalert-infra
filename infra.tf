@@ -28,6 +28,19 @@ variable "acm_certificate_arn" {
   type        = string
 }
 
+variable "tls_domain" {
+  description = "Primary domain (or wildcard) to match an existing ACM certificate"
+  type        = string
+  default = "anim-alert.org"
+}
+
+data "aws_acm_certificate" "selected" {
+  domain_name = var.tls_domain
+  statuses    = ["ISSUED"]
+  most_recent = true
+  types       = ["AMAZON_ISSUED"]
+}
+
 ###############################################################################
 # 2. Networking – NEW VPC, Subnets, NAT
 ###############################################################################
@@ -206,7 +219,7 @@ resource "aws_lb_listener" "https" {
   port              = 443
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-2016-08"
-  certificate_arn   = var.acm_certificate_arn
+  certificate_arn   = data.aws_acm_certificate.selected.arn
 
   default_action {
     type             = "forward"
