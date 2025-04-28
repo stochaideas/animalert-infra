@@ -135,25 +135,26 @@ resource "aws_s3_bucket" "backups" { bucket = "animalert-backups" }
 data "aws_caller_identity" "current" {}
 
 resource "aws_s3_bucket_policy" "logs_allow_alb" {
-  bucket = aws_s3_bucket.logs.id   
+  bucket = aws_s3_bucket.logs.id
 
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
-      # ALB writes the log objects
       {
-        Sid       = "AWSLoadBalancerLogging",
+        Sid       = "AWSLoadBalancerLoggingPut",
         Effect    = "Allow",
         Principal = { Service = "logdelivery.elasticloadbalancing.amazonaws.com" },
         Action    = "s3:PutObject",
-        Resource  = "arn:aws:s3:::${aws_s3_bucket.logs.bucket}/AWSLogs/${data.aws_caller_identity.current.account_id}/*",
+        Resource  = [
+          # ↙ include the exact prefix you set on the load balancer
+          "arn:aws:s3:::${aws_s3_bucket.logs.bucket}/alb-access-logs/AWSLogs/${data.aws_caller_identity.current.account_id}/*"
+        ],
         Condition = {
           StringEquals = { "s3:x-amz-acl" = "bucket-owner-full-control" }
         }
       },
-      # ALB first reads the bucket ACL to be sure it can write
       {
-        Sid       = "AWSLoadBalancerGetBucketAcl",
+        Sid       = "AWSLoadBalancerLoggingGetAcl",
         Effect    = "Allow",
         Principal = { Service = "logdelivery.elasticloadbalancing.amazonaws.com" },
         Action    = "s3:GetBucketAcl",
@@ -162,6 +163,8 @@ resource "aws_s3_bucket_policy" "logs_allow_alb" {
     ]
   })
 }
+
+
 
 ###############################################################################
 # 4. ECR Repository
