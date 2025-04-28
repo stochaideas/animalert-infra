@@ -127,6 +127,41 @@ locals {
 resource "aws_s3_bucket" "images"  { bucket = "animalert-images"  }
 resource "aws_s3_bucket" "logs"    { bucket = "animalert-logs"    }
 resource "aws_s3_bucket" "backups" { bucket = "animalert-backups" }
+###############################################################################
+# Grants the ALB logging service permission to write access-log objects
+###############################################################################
+
+# Your AWS account-ID is needed inside the policy
+data "aws_caller_identity" "current" {}
+
+resource "aws_s3_bucket_policy" "logs_allow_alb" {
+  bucket = aws_s3_bucket.logs.id   
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      # ALB writes the log objects
+      {
+        Sid       = "AWSLoadBalancerLogging",
+        Effect    = "Allow",
+        Principal = { Service = "logdelivery.elasticloadbalancing.amazonaws.com" },
+        Action    = "s3:PutObject",
+        Resource  = "arn:aws:s3:::${aws_s3_bucket.logs.bucket}/AWSLogs/${data.aws_caller_identity.current.account_id}/*",
+        Condition = {
+          StringEquals = { "s3:x-amz-acl" = "bucket-owner-full-control" }
+        }
+      },
+      # ALB first reads the bucket ACL to be sure it can write
+      {
+        Sid       = "AWSLoadBalancerGetBucketAcl",
+        Effect    = "Allow",
+        Principal = { Service = "logdelivery.elasticloadbalancing.amazonaws.com" },
+        Action    = "s3:GetBucketAcl",
+        Resource  = "arn:aws:s3:::${aws_s3_bucket.logs.bucket}"
+      }
+    ]
+  })
+}
 
 ###############################################################################
 # 4. ECR Repository
