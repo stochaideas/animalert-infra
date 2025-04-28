@@ -133,10 +133,6 @@ resource "aws_s3_bucket" "backups" { bucket = "animalert-backups" }
 
 # Your AWS account-ID is needed inside the policy
 data "aws_caller_identity" "current" {}
-###############################################################################
-# Allow ALB log-delivery service to write with prefix "alb-access-logs/"
-###############################################################################
-data "aws_caller_identity" "current" {}
 
 resource "aws_s3_bucket_policy" "logs_allow_alb" {
   bucket = aws_s3_bucket.logs.id
