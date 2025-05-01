@@ -294,7 +294,10 @@ resource "aws_service_discovery_service" "db" {
   name        = "db"
   dns_config {
     namespace_id  = aws_service_discovery_private_dns_namespace.animalert.id
-    dns_records   { type = "A", ttl = 10 }
+    dns_records {
+                  type = "A"
+                  ttl = 10 
+                }
     routing_policy = "MULTIVALUE"
   }
 }
