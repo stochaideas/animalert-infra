@@ -1,3 +1,4 @@
+
 ###############################################################################
 # Terraform Required Providers
 ###############################################################################
@@ -26,11 +27,11 @@ variable "aws_region" {
 variable "tls_domain" {
   description = "Primary domain (or wildcard) to match an existing ACM certificate"
   type        = string
-  default = "anim-alert.org"
+  default     = "anim-alert.org"
 }
 
 data "aws_acm_certificate" "selected" {
-  domain = var.tls_domain
+  domain      = var.tls_domain
   statuses    = ["ISSUED"]
   most_recent = true
   types       = ["AMAZON_ISSUED"]
@@ -40,7 +41,6 @@ data "aws_acm_certificate" "selected" {
 # 2. Networking – NEW VPC, Subnets, NAT
 ###############################################################################
 # Availability Zones
-
 data "aws_availability_zones" "available" {}
 
 # VPC
@@ -127,11 +127,8 @@ locals {
 resource "aws_s3_bucket" "images"  { bucket = "animalert-images"  }
 resource "aws_s3_bucket" "logs"    { bucket = "animalert-logs"    }
 resource "aws_s3_bucket" "backups" { bucket = "animalert-backups" }
-###############################################################################
-# Grants the ALB logging service permission to write access-log objects
-###############################################################################
 
-# Your AWS account-ID is needed inside the policy
+# Allow ALB to write access logs
 data "aws_caller_identity" "current" {}
 
 resource "aws_s3_bucket_policy" "logs_allow_alb" {
@@ -146,7 +143,6 @@ resource "aws_s3_bucket_policy" "logs_allow_alb" {
         Principal = { Service = "logdelivery.elasticloadbalancing.amazonaws.com" },
         Action    = "s3:PutObject",
         Resource  = [
-          # ↙ include the exact prefix you set on the load balancer
           "arn:aws:s3:::${aws_s3_bucket.logs.bucket}/alb-access-logs/AWSLogs/${data.aws_caller_identity.current.account_id}/*"
         ],
         Condition = {
@@ -164,8 +160,6 @@ resource "aws_s3_bucket_policy" "logs_allow_alb" {
   })
 }
 
-
-
 ###############################################################################
 # 4. ECR Repository
 ###############################################################################
@@ -175,7 +169,7 @@ resource "aws_ecr_repository" "web_app_repo" {
 }
 
 ###############################################################################
-# 5. Security Groups – ALB (443) & ECS (3000)
+# 5. Security Groups – ALB (443) & ECS (3000) & DB (5432)
 ###############################################################################
 resource "aws_security_group" "alb_sg" {
   name   = "alb-sg"
@@ -197,6 +191,7 @@ resource "aws_security_group" "alb_sg" {
   }
 }
 
+# Security group for web-app ECS tasks
 resource "aws_security_group" "ecs_service_sg" {
   name   = "ecs-service-sg"
   vpc_id = aws_vpc.main.id
@@ -207,6 +202,27 @@ resource "aws_security_group" "ecs_service_sg" {
     to_port         = 3000
     protocol        = "tcp"
     security_groups = [aws_security_group.alb_sg.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+# Security group for Postgres ECS tasks
+resource "aws_security_group" "db_sg" {
+  name   = "db-sg"
+  vpc_id = aws_vpc.main.id
+
+  ingress {
+    description     = "Postgres from ECS web-app tasks"
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    security_groups = [aws_security_group.ecs_service_sg.id]
   }
 
   egress {
@@ -268,10 +284,29 @@ resource "aws_ecs_cluster" "main" {
 }
 
 ###############################################################################
+# 7b. Service Discovery (Cloud Map) for internal DNS
+###############################################################################
+resource "aws_service_discovery_private_dns_namespace" "animalert" {
+  name = "animalert.local"
+  vpc  = aws_vpc.main.id
+}
+
+resource "aws_service_discovery_service" "db" {
+  name        = "db"
+  dns_config {
+    namespace_id  = aws_service_discovery_private_dns_namespace.animalert.id
+    dns_records {
+                  type = "A"
+                  ttl = 10 
+                }
+    routing_policy = "MULTIVALUE"
+  }
+}
+
+###############################################################################
 # 8. IAM Roles – Execution, Task, Infrastructure
 ###############################################################################
 # --- a) Execution Role -------------------------------------------------------
-
 data "aws_iam_policy_document" "ecs_task_execution_assume_role" {
   statement {
     actions   = ["sts:AssumeRole"]
@@ -292,8 +327,7 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution_policy" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-# --- b) Task Role -----------------------------------------------------------
-
+# --- b) Task Role ------------------------------------------------------------
 data "aws_iam_policy_document" "ecs_task_role_assume_role" {
   statement {
     actions   = ["sts:AssumeRole"]
@@ -331,8 +365,7 @@ resource "aws_iam_role_policy_attachment" "ecs_task_s3_policy_attachment" {
   policy_arn = aws_iam_policy.ecs_task_s3_policy.arn
 }
 
-# --- c) Infrastructure Role (managed EBS volumes) --------------------------
-
+# --- c) Infrastructure Role (managed EBS volumes) ---------------------------
 data "aws_iam_policy_document" "ecs_infra_assume_role" {
   statement {
     actions   = ["sts:AssumeRole"]
@@ -367,7 +400,7 @@ resource "aws_cloudwatch_log_group" "db_lg" {
 }
 
 ###############################################################################
-# 10. ECS Task Definition – app on 3000
+# 10a. ECS Task Definition – WEB APP
 ###############################################################################
 resource "aws_ecs_task_definition" "web_app_task" {
   family                   = "animalert-web-app-task"
@@ -379,6 +412,49 @@ resource "aws_ecs_task_definition" "web_app_task" {
   execution_role_arn = aws_iam_role.ecs_task_execution_role.arn
   task_role_arn      = aws_iam_role.ecs_task_role.arn
 
+  container_definitions = jsonencode([
+    {
+      name      = "web-app"
+      image     = "${aws_ecr_repository.web_app_repo.repository_url}:latest"
+      essential = true
+
+      portMappings = [
+        { containerPort = 3000, protocol = "tcp" }
+      ]
+
+      environment = [
+        { name = "DB_HOST", value = "db.animalert.local" },
+        { name = "DB_PORT", value = "5432" },
+        { name = "DB_NAME", value = "my_app_db" },
+        { name = "DB_USER", value = "myuser" },
+        { name = "DB_PASSWORD", value = "super-secret" }
+      ]
+
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          awslogs-group         = aws_cloudwatch_log_group.web_app_lg.name
+          awslogs-region        = var.aws_region
+          awslogs-stream-prefix = "webapp"
+        }
+      }
+    }
+  ])
+}
+
+###############################################################################
+# 10b. ECS Task Definition – POSTGRES
+###############################################################################
+resource "aws_ecs_task_definition" "db_task" {
+  family                   = "animalert-db-task"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = 512
+  memory                   = 1024
+
+  execution_role_arn = aws_iam_role.ecs_task_execution_role.arn
+  task_role_arn      = aws_iam_role.ecs_task_role.arn
+
   volume {
     name                = "db-volume"
     configure_at_launch = true
@@ -386,40 +462,29 @@ resource "aws_ecs_task_definition" "web_app_task" {
 
   container_definitions = jsonencode([
     {
-      name      = "web-app",
-      image     = "${aws_ecr_repository.web_app_repo.repository_url}:latest",
-      essential = true,
-      portMappings = [{ containerPort = 3000, protocol = "tcp" }],
-      environment = [
-        { name = "DB_HOST",     value = "127.0.0.1" },
-        { name = "DB_NAME",     value = "my_app_db" },
-        { name = "DB_USER",     value = "myuser" },
-        { name = "DB_PASSWORD", value = "super-secret" }
-      ],
-      logConfiguration = {
-        logDriver = "awslogs",
-        options   = {
-          awslogs-group         = aws_cloudwatch_log_group.web_app_lg.name,
-          awslogs-region        = var.aws_region,
-          awslogs-stream-prefix = "webapp"
-        }
-      }
-    },
-    {
-      name      = "database",
-      image     = "postgres:14",
-      essential = true,
+      name      = "database"
+      image     = "postgres:14"
+      essential = true
+
       environment = [
         { name = "POSTGRES_DB",       value = "my_app_db" },
         { name = "POSTGRES_USER",     value = "myuser" },
         { name = "POSTGRES_PASSWORD", value = "super-secret" }
-      ],
-      mountPoints = [{ sourceVolume = "db-volume", containerPath = "/var/lib/postgresql/data" }],
+      ]
+
+      mountPoints = [
+        { sourceVolume = "db-volume", containerPath = "/var/lib/postgresql/data" }
+      ]
+
+      portMappings = [
+        { containerPort = 5432, protocol = "tcp" }
+      ]
+
       logConfiguration = {
-        logDriver = "awslogs",
-        options   = {
-          awslogs-group         = aws_cloudwatch_log_group.db_lg.name,
-          awslogs-region        = var.aws_region,
+        logDriver = "awslogs"
+        options = {
+          awslogs-group         = aws_cloudwatch_log_group.db_lg.name
+          awslogs-region        = var.aws_region
           awslogs-stream-prefix = "db"
         }
       }
@@ -428,7 +493,7 @@ resource "aws_ecs_task_definition" "web_app_task" {
 }
 
 ###############################################################################
-# 11. ECS Service – Fargate + managed EBS
+# 11a. ECS Service – WEB APP (Fargate)
 ###############################################################################
 resource "aws_ecs_service" "web_app_service" {
   name             = "animalert-web-app-service"
@@ -451,6 +516,31 @@ resource "aws_ecs_service" "web_app_service" {
     container_port   = 3000
   }
 
+  depends_on = [aws_lb_listener.https]
+}
+
+###############################################################################
+# 11b. ECS Service – DATABASE (Fargate + managed EBS)
+###############################################################################
+resource "aws_ecs_service" "db_service" {
+  name             = "animalert-db-service"
+  cluster          = aws_ecs_cluster.main.arn
+  launch_type      = "FARGATE"
+  desired_count    = 1
+  platform_version = "1.4.0"
+
+  task_definition = aws_ecs_task_definition.db_task.arn
+
+  network_configuration {
+    subnets          = local.private_subnets
+    security_groups  = [aws_security_group.db_sg.id]
+    assign_public_ip = false
+  }
+
+  service_registries {
+    registry_arn = aws_service_discovery_service.db.arn
+  }
+
   volume_configuration {
     name = "db-volume"
 
@@ -464,8 +554,6 @@ resource "aws_ecs_service" "web_app_service" {
       file_system_type = "ext4"
     }
   }
-
-  depends_on = [aws_lb_listener.https]
 }
 
 ###############################################################################
