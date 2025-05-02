@@ -29,6 +29,24 @@ variable "tls_domain" {
   type        = string
   default     = "anim-alert.org"
 }
+variable "db_host" { type = string }
+variable "db_port" { type = number }
+variable "db_name" { type = string }
+variable "db_user" { type = string }
+
+variable "google_api_id" {
+  type = string
+  sensitive = true
+}
+variable "google_api_key" { 
+  type = string
+  sensitive = true
+}
+
+variable "db_password" {
+  type      = string
+  sensitive = true
+}
 
 data "aws_acm_certificate" "selected" {
   domain      = var.tls_domain
@@ -422,12 +440,27 @@ resource "aws_ecs_task_definition" "web_app_task" {
         { containerPort = 3000, protocol = "tcp" }
       ]
 
-      environment = [
-        { name = "DB_HOST", value = "db.animalert.local" },
-        { name = "DB_PORT", value = "5432" },
-        { name = "DB_NAME", value = "my_app_db" },
-        { name = "DB_USER", value = "myuser" },
-        { name = "DB_PASSWORD", value = "super-secret" }
+  environment = [
+        { name = "DB_HOST", value = var.db_host },
+        { name = "DB_PORT", value = tostring(var.db_port) },  # must be string
+        { name = "DB_NAME", value = var.db_name },
+        { name = "DB_USER", value = var.db_user }
+      ]
+  
+      # keep the secret out of state & logs
+      secrets = [
+        {
+          name      = "DATABASE_URL",
+          valueFrom = var.db_password   # we’ll feed this via TF_VAR_db_password
+        },
+        {
+          name = "NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID",
+          valueFrom = var.google_api_id
+        },
+         {
+          name = "NEXT_PUBLIC_GOOGLE_MAPS_API_KEY",
+          valueFrom = var.google_api_key
+        },
       ]
 
       logConfiguration = {

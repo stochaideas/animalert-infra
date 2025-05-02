@@ -9,6 +9,13 @@ env:
   TF_IN_AUTOMATION: true
   TF_CLI_ARGS_init: -input=false
   TF_CLI_ARGS_apply: -auto-approve -input=false
+  TF_VAR_db_host: "host"
+  TF_VAR_db_port: 1234
+  TF_VAR_db_name: "name"
+  TF_VAR_db_user: "user"
+  TF_VAR_db_password: "password"
+  TF_VAR_google_api_id: "id"
+  TF_VAR_google_api_key: "key123"
   AWS_REGION: eu-central-1
 
 jobs:
@@ -41,7 +48,6 @@ jobs:
         with:
           name: tf-plan
           path: plan.out
-       # 5 — convert to JSON for the commenter
       - run: terraform show -json plan.out > plan.json
 
       # 6 — post (or update) the sticky PR comment
