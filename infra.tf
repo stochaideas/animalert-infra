@@ -444,23 +444,10 @@ resource "aws_ecs_task_definition" "web_app_task" {
         { name = "DB_HOST", value = var.db_host },
         { name = "DB_PORT", value = tostring(var.db_port) },  # must be string
         { name = "DB_NAME", value = var.db_name },
-        { name = "DB_USER", value = var.db_user }
-      ]
-  
-      # keep the secret out of state & logs
-      secrets = [
-        {
-          name      = "DATABASE_URL",
-          valueFrom = var.db_password   # we’ll feed this via TF_VAR_db_password
-        },
-        {
-          name = "NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID",
-          valueFrom = var.google_api_id
-        },
-         {
-          name = "NEXT_PUBLIC_GOOGLE_MAPS_API_KEY",
-          valueFrom = var.google_api_key
-        },
+        { name = "DB_USER", value = var.db_user },
+        { name = "DB_PASSWORD", value = var.db_password},
+        { name = "NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID", value=var.google_api_id }
+        { name = "NEXT_PUBLIC_GOOGLE_MAPS_API_KEY", value=var.google_api_key }
       ]
 
       logConfiguration = {
