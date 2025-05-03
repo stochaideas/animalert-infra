@@ -446,7 +446,7 @@ resource "aws_ecs_task_definition" "web_app_task" {
         { name = "DB_NAME", value = var.db_name },
         { name = "DB_USER", value = var.db_user },
         { name = "DB_PASSWORD", value = var.db_password},
-        { name = "NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID", value=var.google_api_id }
+        { name = "NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID", value=var.google_api_id },
         { name = "NEXT_PUBLIC_GOOGLE_MAPS_API_KEY", value=var.google_api_key }
       ]
 
