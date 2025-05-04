@@ -18,13 +18,28 @@ provider "aws" {
   region = var.aws_region
 }
 
-variable "aws_region"      { type = string  default = "eu-central-1" }
-variable "tls_domain"      { type = string  default = "anim-alert.org" }
+variable "aws_region"      {
+      type = string 
+      default = "eu-central-1" 
+}
+variable "tls_domain"      {
+      type = string 
+      default = "anim-alert.org"
+}
 variable "db_name"         { type = string }
 variable "db_user"         { type = string }
-variable "db_password"     { type = string sensitive = true }
-variable "google_api_id"   { type = string sensitive = true }
-variable "google_api_key"  { type = string sensitive = true }
+variable "db_password"     { 
+  type = string
+  sensitive = true 
+}
+variable "google_api_id"   { 
+  type = string
+  sensitive = true
+}
+variable "google_api_key"  { 
+  type = string 
+  sensitive = true 
+}
 
 ###############################################################################
 # 2. ACM, Networking (VPC, Subnets, NAT)
