@@ -18,31 +18,18 @@ provider "aws" {
   region = var.aws_region
 }
 
-variable "aws_region"      {
-      type = string 
-      default = "eu-central-1" 
-}
-variable "tls_domain"      {
-      type = string 
-      default = "anim-alert.org"
-}
+variable "aws_region"      { type = string default = "eu-central-1" }
+variable "tls_domain"      { type = string default = "anim-alert.org" }
+
 variable "db_name"         { type = string }
 variable "db_user"         { type = string }
-variable "db_password"     { 
-  type = string
-  sensitive = true 
-}
-variable "google_api_id"   { 
-  type = string
-  sensitive = true
-}
-variable "google_api_key"  { 
-  type = string 
-  sensitive = true 
-}
+variable "db_password"     { type = string sensitive = true }
+
+variable "google_api_id"   { type = string sensitive = true }
+variable "google_api_key"  { type = string sensitive = true }
 
 ###############################################################################
-# 2. ACM, Networking (VPC, Subnets, NAT)
+# 2. ACM Certificate
 ###############################################################################
 data "aws_acm_certificate" "selected" {
   domain      = var.tls_domain
@@ -51,18 +38,27 @@ data "aws_acm_certificate" "selected" {
   types       = ["AMAZON_ISSUED"]
 }
 
+###############################################################################
+# 3. Networking (VPC, Subnets, NAT)
+###############################################################################
 data "aws_availability_zones" "available" {}
 
 resource "aws_vpc" "main" {
   cidr_block           = "10.0.0.0/16"
   enable_dns_support   = true
   enable_dns_hostnames = true
-  tags                 = { Name = "animalert-vpc" }
+
+  tags = {
+    Name = "animalert-vpc"
+  }
 }
 
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.main.id
-  tags   = { Name = "animalert-igw" }
+
+  tags = {
+    Name = "animalert-igw"
+  }
 }
 
 resource "aws_subnet" "public" {
@@ -71,12 +67,19 @@ resource "aws_subnet" "public" {
   cidr_block              = cidrsubnet(aws_vpc.main.cidr_block, 8, count.index + 1) # 10.0.1.0/24 …
   availability_zone       = data.aws_availability_zones.available.names[count.index]
   map_public_ip_on_launch = true
-  tags                    = { Name = "animalert-public-${count.index}" }
+
+  tags = {
+    Name = "animalert-public-${count.index}"
+  }
 }
 
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
-  route  { cidr_block = "0.0.0.0/0" gateway_id = aws_internet_gateway.igw.id }
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.igw.id
+  }
 }
 
 resource "aws_route_table_association" "public" {
@@ -85,12 +88,17 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public.id
 }
 
-resource "aws_eip" "nat" { domain = "vpc" }
+resource "aws_eip" "nat" {
+  domain = "vpc"
+}
 
 resource "aws_nat_gateway" "nat" {
   allocation_id = aws_eip.nat.id
   subnet_id     = aws_subnet.public[0].id
-  tags          = { Name = "animalert-nat" }
+
+  tags = {
+    Name = "animalert-nat"
+  }
 }
 
 resource "aws_subnet" "private" {
@@ -98,12 +106,19 @@ resource "aws_subnet" "private" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = cidrsubnet(aws_vpc.main.cidr_block, 8, count.index + 11) # 10.0.11.0/24 …
   availability_zone = data.aws_availability_zones.available.names[count.index]
-  tags              = { Name = "animalert-private-${count.index}" }
+
+  tags = {
+    Name = "animalert-private-${count.index}"
+  }
 }
 
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.main.id
-  route  { cidr_block = "0.0.0.0/0" nat_gateway_id = aws_nat_gateway.nat.id }
+
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.nat.id
+  }
 }
 
 resource "aws_route_table_association" "private" {
@@ -118,7 +133,7 @@ locals {
 }
 
 ###############################################################################
-# 3. S3 Buckets
+# 4. S3 Buckets (Images, Logs, Backups)
 ###############################################################################
 resource "aws_s3_bucket" "images"  { bucket = "animalert-images"  }
 resource "aws_s3_bucket" "logs"    { bucket = "animalert-logs"    }
@@ -128,30 +143,33 @@ data "aws_caller_identity" "current" {}
 
 resource "aws_s3_bucket_policy" "logs_allow_alb" {
   bucket = aws_s3_bucket.logs.id
+
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
       {
-        Sid    = "AWSLoadBalancerLoggingPut",
-        Effect = "Allow",
+        Sid       = "AWSLoadBalancerLoggingPut",
+        Effect    = "Allow",
         Principal = { Service = "logdelivery.elasticloadbalancing.amazonaws.com" },
-        Action   = "s3:PutObject",
-        Resource = "arn:aws:s3:::${aws_s3_bucket.logs.bucket}/alb-access-logs/AWSLogs/${data.aws_caller_identity.current.account_id}/*",
-        Condition = { StringEquals = { "s3:x-amz-acl" = "bucket-owner-full-control" } }
+        Action    = "s3:PutObject",
+        Resource  = "arn:aws:s3:::${aws_s3_bucket.logs.bucket}/alb-access-logs/AWSLogs/${data.aws_caller_identity.current.account_id}/*",
+        Condition = {
+          StringEquals = { "s3:x-amz-acl" = "bucket-owner-full-control" }
+        }
       },
       {
-        Sid    = "AWSLoadBalancerLoggingGetAcl",
-        Effect = "Allow",
+        Sid       = "AWSLoadBalancerLoggingGetAcl",
+        Effect    = "Allow",
         Principal = { Service = "logdelivery.elasticloadbalancing.amazonaws.com" },
-        Action   = "s3:GetBucketAcl",
-        Resource = "arn:aws:s3:::${aws_s3_bucket.logs.bucket}"
+        Action    = "s3:GetBucketAcl",
+        Resource  = "arn:aws:s3:::${aws_s3_bucket.logs.bucket}"
       }
     ]
   })
 }
 
 ###############################################################################
-# 4. ECR Repository
+# 5. ECR Repository
 ###############################################################################
 resource "aws_ecr_repository" "web_app_repo" {
   name                 = "animalert-webapp"
@@ -159,34 +177,70 @@ resource "aws_ecr_repository" "web_app_repo" {
 }
 
 ###############################################################################
-# 5. Security Groups – ALB (443), ECS (3000), RDS (5432)
+# 6. Security Groups (ALB 443 | ECS 3000 | RDS 5432)
 ###############################################################################
 resource "aws_security_group" "alb_sg" {
   name   = "alb-sg"
   vpc_id = aws_vpc.main.id
 
-  ingress { description = "HTTPS in" from_port = 443 to_port = 443 protocol = "tcp" cidr_blocks = ["0.0.0.0/0"] }
-  egress  { from_port = 0 to_port = 0 protocol = "-1" cidr_blocks = ["0.0.0.0/0"] }
+  ingress {
+    description = "HTTPS in"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 }
 
 resource "aws_security_group" "ecs_service_sg" {
   name   = "ecs-service-sg"
   vpc_id = aws_vpc.main.id
 
-  ingress { description = "from ALB" from_port = 3000 to_port = 3000 protocol = "tcp" security_groups = [aws_security_group.alb_sg.id] }
-  egress  { from_port = 0 to_port = 0 protocol = "-1" cidr_blocks = ["0.0.0.0/0"] }
+  ingress {
+    description     = "From ALB"
+    from_port       = 3000
+    to_port         = 3000
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb_sg.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 }
 
 resource "aws_security_group" "db_sg" {
   name   = "db-sg"
   vpc_id = aws_vpc.main.id
 
-  ingress { description = "Postgres from ECS web-app tasks" from_port = 5432 to_port = 5432 protocol = "tcp" security_groups = [aws_security_group.ecs_service_sg.id] }
-  egress  { from_port = 0 to_port = 0 protocol = "-1" cidr_blocks = ["0.0.0.0/0"] }
+  ingress {
+    description     = "Postgres from ECS tasks"
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    security_groups = [aws_security_group.ecs_service_sg.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 }
 
 ###############################################################################
-# 6. Application Load Balancer & HTTPS Listener
+# 7. Application Load Balancer & HTTPS Listener
 ###############################################################################
 resource "aws_lb" "app_lb" {
   name               = "my-app-lb"
@@ -222,21 +276,31 @@ resource "aws_lb_listener" "https" {
   ssl_policy        = "ELBSecurityPolicy-2016-08"
   certificate_arn   = data.aws_acm_certificate.selected.arn
 
-  default_action { type = "forward" target_group_arn = aws_lb_target_group.app_tg.arn }
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.app_tg.arn
+  }
 }
 
 ###############################################################################
-# 7. ECS Cluster
+# 8. ECS Cluster
 ###############################################################################
 resource "aws_ecs_cluster" "main" {
   name = "animalert-ecs-cluster"
 }
 
 ###############################################################################
-# 8. IAM Roles (Execution, Task, Infrastructure)
+# 9. IAM Roles (Execution & Task)
 ###############################################################################
 data "aws_iam_policy_document" "ecs_task_execution_assume_role" {
-  statement { actions = ["sts:AssumeRole"] principals { type = "Service" identifiers = ["ecs-tasks.amazonaws.com"] } }
+  statement {
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["ecs-tasks.amazonaws.com"]
+    }
+  }
 }
 
 resource "aws_iam_role" "ecs_task_execution_role" {
@@ -250,7 +314,14 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution_policy" {
 }
 
 data "aws_iam_policy_document" "ecs_task_role_assume_role" {
-  statement { actions = ["sts:AssumeRole"] principals { type = "Service" identifiers = ["ecs-tasks.amazonaws.com"] } }
+  statement {
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["ecs-tasks.amazonaws.com"]
+    }
+  }
 }
 
 resource "aws_iam_role" "ecs_task_role" {
@@ -260,9 +331,13 @@ resource "aws_iam_role" "ecs_task_role" {
 
 data "aws_iam_policy_document" "ecs_task_s3_policy_doc" {
   statement {
-    sid       = "AllowS3Access"
-    actions   = ["s3:GetObject", "s3:PutObject"]
-    resources = ["${aws_s3_bucket.images.arn}/*", "${aws_s3_bucket.logs.arn}/*", "${aws_s3_bucket.backups.arn}/*"]
+    sid     = "AllowS3Access"
+    actions = ["s3:GetObject", "s3:PutObject"]
+    resources = [
+      "${aws_s3_bucket.images.arn}/*",
+      "${aws_s3_bucket.logs.arn}/*",
+      "${aws_s3_bucket.backups.arn}/*"
+    ]
   }
 }
 
@@ -277,7 +352,7 @@ resource "aws_iam_role_policy_attachment" "ecs_task_s3_policy_attachment" {
 }
 
 ###############################################################################
-# 9. CloudWatch Log Group (Web-App only — DB now handled by RDS)
+# 10. CloudWatch Log Group (Web App)
 ###############################################################################
 resource "aws_cloudwatch_log_group" "web_app_lg" {
   name              = "/ecs/web-app"
@@ -285,7 +360,7 @@ resource "aws_cloudwatch_log_group" "web_app_lg" {
 }
 
 ###############################################################################
-# 10. ECS Task Definition – WEB APP (unchanged)
+# 11. ECS Task Definition – Web App
 ###############################################################################
 resource "aws_ecs_task_definition" "web_app_task" {
   family                   = "animalert-web-app-task"
@@ -302,7 +377,12 @@ resource "aws_ecs_task_definition" "web_app_task" {
       image     = "${aws_ecr_repository.web_app_repo.repository_url}:latest",
       essential = true,
 
-      portMappings = [{ containerPort = 3000, protocol = "tcp" }],
+      portMappings = [
+        {
+          containerPort = 3000,
+          protocol      = "tcp"
+        }
+      ],
 
       environment = [
         { name = "DB_HOST", value = aws_db_instance.postgres.endpoint },
@@ -327,7 +407,7 @@ resource "aws_ecs_task_definition" "web_app_task" {
 }
 
 ###############################################################################
-# 11a. ECS Service – WEB APP (Fargate)
+# 12. ECS Service – Web App
 ###############################################################################
 resource "aws_ecs_service" "web_app_service" {
   name             = "animalert-web-app-service"
@@ -349,26 +429,32 @@ resource "aws_ecs_service" "web_app_service" {
     container_port   = 3000
   }
 
-  depends_on = [aws_lb_listener.https]
+  depends_on = [
+    aws_lb_listener.https
+  ]
 }
 
 ###############################################################################
-# 12. *** NEW ***  RDS PostgreSQL (replaces Fargate DB)
+# 13. RDS PostgreSQL (db.t4g.micro)
 ###############################################################################
 resource "aws_db_subnet_group" "postgres" {
   name       = "animalert-db-subnet-group"
   subnet_ids = local.private_subnets
-  tags       = { Name = "animalert-db-subnet-group" }
+
+  tags = {
+    Name = "animalert-db-subnet-group"
+  }
 }
 
 resource "aws_db_instance" "postgres" {
-  identifier             = "animalert-postgres"
-  engine                 = "postgres"
-  engine_version         = "14.11"
-  instance_class         = "db.t4g.micro"
-  allocated_storage      = 20
-  storage_type           = "gp3"
-  max_allocated_storage  = 100
+  identifier            = "animalert-postgres"
+  engine                = "postgres"
+  engine_version        = "14.11"
+  instance_class        = "db.t4g.micro"
+  allocated_storage     = 20
+  storage_type          = "gp3"
+  max_allocated_storage = 100
+
   db_name                = var.db_name
   username               = var.db_user
   password               = var.db_password
@@ -378,16 +464,19 @@ resource "aws_db_instance" "postgres" {
   vpc_security_group_ids = [aws_security_group.db_sg.id]
   db_subnet_group_name   = aws_db_subnet_group.postgres.name
 
-  backup_retention_period = 7
-  auto_minor_version_upgrade = true
-  deletion_protection     = false
-  skip_final_snapshot     = true    # change in production!
-  apply_immediately       = true
-  tags = { Name = "animalert-postgres" }
+  backup_retention_period     = 7
+  auto_minor_version_upgrade  = true
+  deletion_protection         = false
+  skip_final_snapshot         = true
+  apply_immediately           = true
+
+  tags = {
+    Name = "animalert-postgres"
+  }
 }
 
 ###############################################################################
-# 13. Outputs (handy when integrating elsewhere)
+# 14. Outputs
 ###############################################################################
 output "rds_endpoint" {
   value = aws_db_instance.postgres.endpoint
