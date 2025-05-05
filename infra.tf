@@ -446,6 +446,17 @@ resource "aws_ecs_task_definition" "web_app_task" {
         {
           name  = "NEXT_PUBLIC_GOOGLE_MAPS_API_KEY",
           value = var.google_api_key
+        },
+         {
+          name  = "DATABASE_URL"
+          value = format(
+            "postgresql://%s:%s@%s:%s/%s",
+            var.db_user,
+            var.db_password,
+            aws_db_instance.postgres.address,   # hostname only
+            tostring(aws_db_instance.postgres.port),
+            var.db_name
+          )
         }
       ],
 
