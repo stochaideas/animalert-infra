@@ -58,7 +58,7 @@ variable "google_api_key" {
 data "aws_acm_certificate" "selected" {
   domain      = var.tls_domain
   statuses    = ["ISSUED"]
-  most_recent = true
+  most_recent = false
   types       = ["AMAZON_ISSUED"]
 }
 
