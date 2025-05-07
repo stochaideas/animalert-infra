@@ -50,6 +50,9 @@ variable "google_api_key" {
   type      = string
   sensitive = true
 }
+variable "site_origin"        { default = "https://anim-alert.org" }
+variable "local_origin"       { default = "http://localhost:3000" }
+
 
 ###############################################################################
 # 2. ACM certificate
@@ -200,6 +203,22 @@ resource "aws_s3_bucket_policy" "logs_allow_alb" {
     ]
   })
 }
+resource "aws_s3_bucket_cors_configuration" "cors" {
+  bucket = aws_s3_bucket.images.id
+
+  cors_rule {
+    id              = "web-and-local"
+    allowed_methods = ["PUT", "POST", "GET", "HEAD"]
+    allowed_origins = [
+      var.site_origin,
+      var.local_origin
+    ]
+    allowed_headers = ["*"]
+    expose_headers  = ["ETag"]
+    max_age_seconds = 3000
+  }
+}
+
 
 ###############################################################################
 # 5. ECR repository
