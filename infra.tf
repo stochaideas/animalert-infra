@@ -472,7 +472,7 @@ resource "aws_ecs_task_definition" "web_app_task" {
          {
           name  = "DATABASE_URL"
           value = format(
-            "postgresql://%s:%s@%s:%s/%s",
+            "postgresql://%s:%s@%s:%s/%s?sslmode=require",
             var.db_user,
             var.db_password,
             aws_db_instance.postgres.address,   # hostname only
