@@ -465,6 +465,10 @@ resource "aws_ecs_task_definition" "web_app_task" {
           name  = "NEXT_PUBLIC_GOOGLE_MAPS_API_KEY",
           value = var.google_api_key
         },
+        {
+          name  = "AWS_S3_BUCKET_NAME",
+          value = "animalert-images"
+        },
          {
           name  = "DATABASE_URL"
           value = format(
@@ -497,7 +501,7 @@ resource "aws_ecs_service" "web_app_service" {
   name             = "animalert-web-app-service"
   cluster          = aws_ecs_cluster.main.arn
   launch_type      = "FARGATE"
-  desired_count    = 2
+  desired_count    = 1
   platform_version = "1.4.0"
   task_definition  = aws_ecs_task_definition.web_app_task.arn
 
