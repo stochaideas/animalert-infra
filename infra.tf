@@ -733,29 +733,6 @@ resource "aws_db_instance" "postgres" {
 }
 
 ###############################################################################
-# Optional: Create staging DB in the same RDS instance
-# (Uncomment if you want Terraform to run CREATE DATABASE automatically)
-###############################################################################
-# resource "null_resource" "create_stage_db" {
-#   provisioner "local-exec" {
-#     command = <<EOT
-#       PGPASSWORD="${var.db_password}" psql \
-#         --host="${aws_db_instance.postgres.address}" \
-#         --port="${aws_db_instance.postgres.port}" \
-#         --username="${var.db_user}" \
-#         --dbname="${var.db_name}" \
-#         --command="CREATE DATABASE ${var.db_name_stage};"
-#     EOT
-#   }
-#   triggers = {
-#     stage_db_name = var.db_name_stage
-#   }
-#   depends_on = [
-#     aws_db_instance.postgres
-#   ]
-# }
-
-###############################################################################
 # 14. Outputs
 ###############################################################################
 output "rds_endpoint" {
