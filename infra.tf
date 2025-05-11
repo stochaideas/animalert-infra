@@ -50,9 +50,29 @@ variable "google_api_key" {
   type      = string
   sensitive = true
 }
-variable "site_origin"        { default = "https://anim-alert.org" }
-variable "local_origin"       { default = "http://localhost:3000" }
 
+variable "site_origin" {
+  type    = string
+  default = "https://anim-alert.org"
+}
+
+variable "local_origin" {
+  type    = string
+  default = "http://localhost:3000"
+}
+
+# --------------------------------
+# NEW VARIABLES FOR STAGING
+# --------------------------------
+variable "db_name_stage" {
+  type    = string
+  default = "animalert_stage"
+}
+
+variable "stage_subdomain" {
+  type    = string
+  default = "stage.anim-alert.org"
+}
 
 ###############################################################################
 # 2. ACM certificate
@@ -203,6 +223,7 @@ resource "aws_s3_bucket_policy" "logs_allow_alb" {
     ]
   })
 }
+
 resource "aws_s3_bucket_cors_configuration" "cors" {
   bucket = aws_s3_bucket.images.id
 
@@ -218,7 +239,6 @@ resource "aws_s3_bucket_cors_configuration" "cors" {
     max_age_seconds = 3000
   }
 }
-
 
 ###############################################################################
 # 5. ECR repository
@@ -307,6 +327,9 @@ resource "aws_lb" "app_lb" {
   }
 }
 
+# -----------------------------
+# MAIN (production) target group
+# -----------------------------
 resource "aws_lb_target_group" "app_tg" {
   name        = "my-app-tg"
   port        = 3000
@@ -331,6 +354,40 @@ resource "aws_lb_listener" "https" {
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.app_tg.arn
+  }
+}
+
+# -----------------------------
+# STAGING target group
+# -----------------------------
+resource "aws_lb_target_group" "app_tg_stage" {
+  name        = "my-app-stage-tg"
+  port        = 3000
+  protocol    = "HTTP"
+  vpc_id      = aws_vpc.main.id
+  target_type = "ip"
+
+  health_check {
+    path     = "/"
+    port     = "traffic-port"
+    protocol = "HTTP"
+  }
+}
+
+# Listener rule to match the staging subdomain
+resource "aws_lb_listener_rule" "stage" {
+  listener_arn = aws_lb_listener.https.arn
+  priority     = 10
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.app_tg_stage.arn
+  }
+
+  condition {
+    host_header {
+      values = [var.stage_subdomain]
+    }
   }
 }
 
@@ -384,7 +441,10 @@ resource "aws_iam_role" "ecs_task_role" {
 data "aws_iam_policy_document" "ecs_task_s3_policy_doc" {
   statement {
     sid     = "AllowS3Access"
-    actions = ["s3:GetObject", "s3:PutObject"]
+    actions = [
+      "s3:GetObject",
+      "s3:PutObject"
+    ]
     resources = [
       "${aws_s3_bucket.images.arn}/*",
       "${aws_s3_bucket.logs.arn}/*",
@@ -412,8 +472,9 @@ resource "aws_cloudwatch_log_group" "web_app_lg" {
 }
 
 ###############################################################################
-# 11. ECS task definition – web app
+# 11. ECS task definitions – web app
 ###############################################################################
+# Production
 resource "aws_ecs_task_definition" "web_app_task" {
   family                   = "animalert-web-app-task"
   network_mode             = "awsvpc"
@@ -469,13 +530,13 @@ resource "aws_ecs_task_definition" "web_app_task" {
           name  = "AWS_S3_BUCKET_NAME",
           value = "animalert-images"
         },
-         {
-          name  = "DATABASE_URL"
+        {
+          name  = "DATABASE_URL",
           value = format(
             "postgresql://%s:%s@%s:%s/%s?sslmode=require",
             var.db_user,
             var.db_password,
-            aws_db_instance.postgres.address,   # hostname only
+            aws_db_instance.postgres.address,
             tostring(aws_db_instance.postgres.port),
             var.db_name
           )
@@ -494,9 +555,91 @@ resource "aws_ecs_task_definition" "web_app_task" {
   ])
 }
 
+# Staging
+resource "aws_ecs_task_definition" "web_app_task_stage" {
+  family                   = "animalert-web-app-task-stage"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = 256
+  memory                   = 512
+  execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
+  task_role_arn            = aws_iam_role.ecs_task_role.arn
+
+  container_definitions = jsonencode([
+    {
+      name      = "web-app-stage",
+      image     = "${aws_ecr_repository.web_app_repo.repository_url}:latest",
+      essential = true,
+
+      portMappings = [
+        {
+          containerPort = 3000,
+          protocol      = "tcp"
+        }
+      ],
+
+      environment = [
+        {
+          name  = "DB_HOST",
+          value = aws_db_instance.postgres.endpoint
+        },
+        {
+          name  = "DB_PORT",
+          value = tostring(aws_db_instance.postgres.port)
+        },
+        {
+          name  = "DB_NAME",
+          value = var.db_name_stage
+        },
+        {
+          name  = "DB_USER",
+          value = var.db_user
+        },
+        {
+          name  = "DB_PASSWORD",
+          value = var.db_password
+        },
+        {
+          name  = "NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID",
+          value = var.google_api_id
+        },
+        {
+          name  = "NEXT_PUBLIC_GOOGLE_MAPS_API_KEY",
+          value = var.google_api_key
+        },
+        {
+          name  = "AWS_S3_BUCKET_NAME",
+          value = "animalert-images"
+        },
+        {
+          name  = "DATABASE_URL",
+          value = format(
+            "postgresql://%s:%s@%s:%s/%s?sslmode=require",
+            var.db_user,
+            var.db_password,
+            aws_db_instance.postgres.address,
+            tostring(aws_db_instance.postgres.port),
+            var.db_name_stage
+          )
+        }
+      ],
+
+      logConfiguration = {
+        logDriver = "awslogs",
+        options = {
+          awslogs-group         = aws_cloudwatch_log_group.web_app_lg.name,
+          awslogs-region        = var.aws_region,
+          awslogs-stream-prefix = "webapp-stage"
+        }
+      }
+    }
+  ])
+}
+
 ###############################################################################
-# 12. ECS service – web app
+# 12. ECS services – web app
 ###############################################################################
+# Production service
 resource "aws_ecs_service" "web_app_service" {
   name             = "animalert-web-app-service"
   cluster          = aws_ecs_cluster.main.arn
@@ -519,6 +662,32 @@ resource "aws_ecs_service" "web_app_service" {
 
   depends_on = [
     aws_lb_listener.https
+  ]
+}
+
+# Staging service
+resource "aws_ecs_service" "web_app_service_stage" {
+  name             = "animalert-web-app-service-stage"
+  cluster          = aws_ecs_cluster.main.arn
+  launch_type      = "FARGATE"
+  desired_count    = 1
+  platform_version = "1.4.0"
+  task_definition  = aws_ecs_task_definition.web_app_task_stage.arn
+
+  network_configuration {
+    subnets          = local.private_subnets
+    security_groups  = [aws_security_group.ecs_service_sg.id]
+    assign_public_ip = false
+  }
+
+  load_balancer {
+    target_group_arn = aws_lb_target_group.app_tg_stage.arn
+    container_name   = "web-app-stage"
+    container_port   = 3000
+  }
+
+  depends_on = [
+    aws_lb_listener_rule.stage
   ]
 }
 
