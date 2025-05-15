@@ -644,6 +644,26 @@ resource "aws_ecs_task_definition" "web_app_task_stage" {
             tostring(aws_db_instance.postgres.port),
             var.db_name_stage
           )
+        },
+        {
+        name = "NODEMAILER_SERVICE"
+        value = "gmail"
+        },
+        {
+        name = "EMAIL_ADMIN"
+        value = "ancbp.cluj@gmail.com"
+        },
+        {
+          name = "EMAIL_USER"
+          value = "ancbp.cluj@gmail.com"
+        },
+        {
+          name = "EMAIL_PASS"
+          value = var.email_pass
+        },
+        {
+          name = "EMAIL_FROM"
+          value = "AnimAlert <ancbp.cluj@gmail.com>"
         }
       ],
 
