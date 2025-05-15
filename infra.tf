@@ -50,7 +50,10 @@ variable "google_api_key" {
   type      = string
   sensitive = true
 }
-
+variable "email_pass" {
+  type      = string
+  sensitive = true
+}
 variable "site_origin" {
   type    = string
   default = "https://anim-alert.org"
@@ -540,6 +543,26 @@ resource "aws_ecs_task_definition" "web_app_task" {
             tostring(aws_db_instance.postgres.port),
             var.db_name
           )
+        },
+        {
+        name = "NODEMAILER_SERVICE"
+        value = "gmail"
+        },
+        {
+        name = "EMAIL_ADMIN"
+        value = "ancbp.cluj@gmail.com"
+        },
+        {
+          name = "EMAIL_USER"
+          value = "ancbp.cluj@gmail.com"
+        },
+        {
+          name = "EMAIL_PASS"
+          value = var.email_pass
+        },
+        {
+          name = "EMAIL_FROM"
+          value = "AnimAlert <ancbp.cluj@gmail.com>"
         }
       ],
 
