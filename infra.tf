@@ -50,14 +50,22 @@ variable "google_api_key" {
   type      = string
   sensitive = true
 }
+
 variable "email_pass" {
   type      = string
   sensitive = true
 }
+
 variable "site_origin" {
   type    = string
   default = "https://anim-alert.org"
 }
+
+variable "stage_origin" {
+  type    = string
+  default = "https://stage.anim-alert.org"
+}
+
 
 variable "local_origin" {
   type    = string
@@ -235,7 +243,8 @@ resource "aws_s3_bucket_cors_configuration" "cors" {
     allowed_methods = ["PUT", "POST", "GET", "HEAD"]
     allowed_origins = [
       var.site_origin,
-      var.local_origin
+      var.local_origin,
+      var.stage_origin
     ]
     allowed_headers = ["*"]
     expose_headers  = ["ETag"]
@@ -425,6 +434,7 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution_policy" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+
 data "aws_iam_policy_document" "ecs_task_role_assume_role" {
   statement {
     actions = ["sts:AssumeRole"]
@@ -545,23 +555,23 @@ resource "aws_ecs_task_definition" "web_app_task" {
           )
         },
         {
-        name = "NODEMAILER_SERVICE"
-        value = "gmail"
+          name  = "NODEMAILER_SERVICE",
+          value = "gmail"
         },
         {
-        name = "EMAIL_ADMIN"
-        value = "ancbp.cluj@gmail.com"
-        },
-        {
-          name = "EMAIL_USER"
+          name  = "EMAIL_ADMIN",
           value = "ancbp.cluj@gmail.com"
         },
         {
-          name = "EMAIL_PASS"
+          name  = "EMAIL_USER",
+          value = "ancbp.cluj@gmail.com"
+        },
+        {
+          name  = "EMAIL_PASS",
           value = var.email_pass
         },
         {
-          name = "EMAIL_FROM"
+          name  = "EMAIL_FROM",
           value = "AnimAlert <ancbp.cluj@gmail.com>"
         }
       ],
@@ -591,7 +601,7 @@ resource "aws_ecs_task_definition" "web_app_task_stage" {
   container_definitions = jsonencode([
     {
       name      = "web-app-stage",
-      image     = "${aws_ecr_repository.web_app_repo.repository_url}:latest",
+      image     = "${aws_ecr_repository.web_app_repo.repository_url}:latest_stage",  # changed tag
       essential = true,
 
       portMappings = [
@@ -646,23 +656,23 @@ resource "aws_ecs_task_definition" "web_app_task_stage" {
           )
         },
         {
-        name = "NODEMAILER_SERVICE"
-        value = "gmail"
+          name  = "NODEMAILER_SERVICE",
+          value = "gmail"
         },
         {
-        name = "EMAIL_ADMIN"
-        value = "ancbp.cluj@gmail.com"
-        },
-        {
-          name = "EMAIL_USER"
+          name  = "EMAIL_ADMIN",
           value = "ancbp.cluj@gmail.com"
         },
         {
-          name = "EMAIL_PASS"
+          name  = "EMAIL_USER",
+          value = "ancbp.cluj@gmail.com"
+        },
+        {
+          name  = "EMAIL_PASS",
           value = var.email_pass
         },
         {
-          name = "EMAIL_FROM"
+          name  = "EMAIL_FROM",
           value = "AnimAlert <ancbp.cluj@gmail.com>"
         }
       ],
@@ -789,6 +799,115 @@ output "rds_port" {
 output "rds_db_name" {
   value = var.db_name
 }
+
+###############################################################################
+# 15. AWS WAF v2 – Web ACL + Bot Control
+###############################################################################
+resource "aws_wafv2_web_acl" "alb_waf" {
+  name        = "animalert-alb-waf"
+  description = "WAF protecting the ALB – common attacks, bad inputs, bots"
+  scope       = "REGIONAL"
+
+  default_action {
+    allow {
+
+    } 
+}
+
+  visibility_config {
+    cloudwatch_metrics_enabled = true
+    metric_name                = "animalert-alb-waf"
+    sampled_requests_enabled   = true
+  }
+
+  rule {
+    name     = "AWS-AWSManagedRulesCommonRuleSet"
+    priority = 0
+
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesCommonRuleSet"
+        vendor_name = "AWS"
+      }
+    }
+
+    override_action { 
+      none {
+
+      } 
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "common-rule-set"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  rule {
+    name     = "AWS-AWSManagedRulesKnownBadInputsRuleSet"
+    priority = 1
+
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesKnownBadInputsRuleSet"
+        vendor_name = "AWS"
+      }
+    }
+
+    override_action {
+      none {
+      
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "known-bad-inputs"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  rule {
+    name     = "AWS-AWSManagedRulesBotControlRuleSet"
+    priority = 2
+
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesBotControlRuleSet"
+        vendor_name = "AWS"
+      }
+    }
+
+    override_action {
+      none {
+    
+      } 
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "bot-control"
+      sampled_requests_enabled   = true
+    }
+  }
+}
+
+# Attach the Web ACL to the ALB
+resource "aws_wafv2_web_acl_association" "alb_waf_assoc" {
+  resource_arn = aws_lb.app_lb.arn
+  web_acl_arn  = aws_wafv2_web_acl.alb_waf.arn
+}
+
+###############################################################################
+# 16. (optional) WAF logging to the existing S3 “logs” bucket
+###############################################################################
+# Uncomment if you’d like raw JSON logs:
+#
+# resource "aws_wafv2_web_acl_logging_configuration" "alb_waf_logging" {
+#   resource_arn            = aws_wafv2_web_acl.alb_waf.arn
+#   log_destination_configs = [aws_s3_bucket.logs.arn]
+# }
 
 ###############################################################################
 # END OF FILE
