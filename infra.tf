@@ -805,7 +805,7 @@ output "rds_db_name" {
 ###############################################################################
 resource "aws_wafv2_web_acl" "alb_waf" {
   name        = "animalert-alb-waf"
-  description = "WAF protecting the ALB – common attacks, bad inputs, bots"
+  description = "WAF protecting the ALB"
   scope       = "REGIONAL"
 
   default_action {
