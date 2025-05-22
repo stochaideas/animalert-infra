@@ -61,6 +61,12 @@ variable "site_origin" {
   default = "https://anim-alert.org"
 }
 
+variable "stage_origin" {
+  type    = string
+  default = "https://stage.anim-alert.org"
+}
+
+
 variable "local_origin" {
   type    = string
   default = "http://localhost:3000"
@@ -237,7 +243,8 @@ resource "aws_s3_bucket_cors_configuration" "cors" {
     allowed_methods = ["PUT", "POST", "GET", "HEAD"]
     allowed_origins = [
       var.site_origin,
-      var.local_origin
+      var.local_origin,
+      var.stage_origin
     ]
     allowed_headers = ["*"]
     expose_headers  = ["ETag"]
@@ -426,6 +433,7 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution_policy" {
   role       = aws_iam_role.ecs_task_execution_role.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
+
 
 data "aws_iam_policy_document" "ecs_task_role_assume_role" {
   statement {
@@ -871,7 +879,11 @@ resource "aws_wafv2_web_acl" "alb_waf" {
       }
     }
 
-    override_action { none {} }
+    override_action {
+      none {
+    
+      } 
+    }
 
     visibility_config {
       cloudwatch_metrics_enabled = true
