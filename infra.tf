@@ -30,6 +30,7 @@ variable "tls_domain" {
 
 variable "db_name" {
   type = string
+  default = "my_app_db"
 }
 
 variable "db_user" {
@@ -780,6 +781,7 @@ resource "aws_db_subnet_group" "postgres" {
 }
 
 resource "aws_db_instance" "postgres" {
+  name                  = "animalert-postgres"
   identifier            = "animalert-postgres"
   engine                = "postgres"
   engine_version        = "17"
