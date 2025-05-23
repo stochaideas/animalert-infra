@@ -802,9 +802,6 @@ resource "aws_db_instance" "postgres" {
   auto_minor_version_upgrade = true
   skip_final_snapshot        = true
   apply_immediately          = true
-  lifecycle {
-    prevent_destroy = true      # <-- Terraform will abort the plan if this resource would be destroyed
-  }
   tags = {
     Name = "animalert-postgres"
   }
@@ -826,18 +823,15 @@ output "rds_db_name" {
 }
 
 ###############################################################################
-# 15. AWS WAF v2 – Web ACL + Bot Control
+# 15. AWS WAF v2 – Web ACL + Bot Control + Global Rate Limit
 ###############################################################################
+
 resource "aws_wafv2_web_acl" "alb_waf" {
   name        = "animalert-alb-waf"
   description = "WAF protecting the ALB"
-  scope       = "REGIONAL"
+  scope       = "REGIONAL"                   # use CLOUDFRONT for edge-wide ACLs
 
-  default_action {
-    allow {
-
-    } 
-}
+  default_action { allow {} }
 
   visibility_config {
     cloudwatch_metrics_enabled = true
@@ -845,9 +839,39 @@ resource "aws_wafv2_web_acl" "alb_waf" {
     sampled_requests_enabled   = true
   }
 
+  # ────────────────────────── ❶ Global rate-based rule ──────────────────────────
+  rule {
+    name     = "Global-IP-RateLimit"
+    priority = 0                      # evaluate first
+
+    action {
+      block {}                        # or captcha / challenge / count
+    }
+
+    statement {
+      rate_based_statement {
+        limit              = 500     # requests per 5-minute window
+        aggregate_key_type = "IP"     # count per source IPv4/IPv6 address
+
+        # (Recommended) respect the real client IP when behind ALB/CF
+        forwarded_ip_config {
+          header_name       = "X-Forwarded-For"
+          fallback_behavior = "MATCH"
+        }
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "ip-rate-limit"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  # ────────────────────────── ❷ AWS-managed rule groups ─────────────────────────
   rule {
     name     = "AWS-AWSManagedRulesCommonRuleSet"
-    priority = 0
+    priority = 1
 
     statement {
       managed_rule_group_statement {
@@ -856,11 +880,7 @@ resource "aws_wafv2_web_acl" "alb_waf" {
       }
     }
 
-    override_action { 
-      none {
-
-      } 
-    }
+    override_action { none {} }
 
     visibility_config {
       cloudwatch_metrics_enabled = true
@@ -871,7 +891,7 @@ resource "aws_wafv2_web_acl" "alb_waf" {
 
   rule {
     name     = "AWS-AWSManagedRulesKnownBadInputsRuleSet"
-    priority = 1
+    priority = 2
 
     statement {
       managed_rule_group_statement {
@@ -880,11 +900,7 @@ resource "aws_wafv2_web_acl" "alb_waf" {
       }
     }
 
-    override_action {
-      none {
-      
-      }
-    }
+    override_action { none {} }
 
     visibility_config {
       cloudwatch_metrics_enabled = true
@@ -895,7 +911,7 @@ resource "aws_wafv2_web_acl" "alb_waf" {
 
   rule {
     name     = "AWS-AWSManagedRulesBotControlRuleSet"
-    priority = 2
+    priority = 3
 
     statement {
       managed_rule_group_statement {
@@ -904,11 +920,7 @@ resource "aws_wafv2_web_acl" "alb_waf" {
       }
     }
 
-    override_action {
-      none {
-    
-      } 
-    }
+    override_action { none {} }
 
     visibility_config {
       cloudwatch_metrics_enabled = true
@@ -918,11 +930,11 @@ resource "aws_wafv2_web_acl" "alb_waf" {
   }
 }
 
-# Attach the Web ACL to the ALB
 resource "aws_wafv2_web_acl_association" "alb_waf_assoc" {
   resource_arn = aws_lb.app_lb.arn
   web_acl_arn  = aws_wafv2_web_acl.alb_waf.arn
 }
+
 
 ###############################################################################
 # 16. (optional) WAF logging to the existing S3 “logs” bucket
