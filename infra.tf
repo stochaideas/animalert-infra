@@ -332,7 +332,6 @@ resource "aws_lb" "app_lb" {
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb_sg.id]
   subnets            = local.public_subnets
-  deletion_protection = true 
   access_logs {
     bucket  = aws_s3_bucket.logs.bucket
     prefix  = "alb-access-logs"
@@ -734,7 +733,9 @@ resource "aws_ecs_service" "web_app_service" {
     container_name   = "web-app"
     container_port   = 3000
   }
-
+  lifecycle {
+    prevent_destroy = true      
+  }
   depends_on = [
     aws_lb_listener.https
   ]
