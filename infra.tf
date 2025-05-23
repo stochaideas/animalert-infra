@@ -326,16 +326,20 @@ resource "aws_security_group" "db_sg" {
 ###############################################################################
 # 7. Application Load Balancer
 ###############################################################################
+
 resource "aws_lb" "app_lb" {
   name               = "my-app-lb"
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb_sg.id]
   subnets            = local.public_subnets
-
+  deletion_protection = true 
   access_logs {
     bucket  = aws_s3_bucket.logs.bucket
     prefix  = "alb-access-logs"
     enabled = true
+  }
+  lifecycle {
+    prevent_destroy = true      
   }
 }
 
@@ -356,6 +360,7 @@ resource "aws_lb_target_group" "app_tg" {
   }
 }
 
+# HTTPS listener (production)
 resource "aws_lb_listener" "https" {
   load_balancer_arn = aws_lb.app_lb.arn
   port              = 443
@@ -366,6 +371,23 @@ resource "aws_lb_listener" "https" {
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.app_tg.arn
+  }
+}
+
+# HTTP listener that redirects to HTTPS
+resource "aws_lb_listener" "http_redirect" {
+  load_balancer_arn = aws_lb.app_lb.arn
+  port              = 80
+  protocol          = "HTTP"
+
+  default_action {
+    type = "redirect"
+
+    redirect {
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
+    }
   }
 }
 
@@ -750,7 +772,7 @@ resource "aws_ecs_service" "web_app_service_stage" {
 resource "aws_db_subnet_group" "postgres" {
   name       = "animalert-db-subnet-group"
   subnet_ids = local.private_subnets
-
+  
   tags = {
     Name = "animalert-db-subnet-group"
   }
@@ -764,7 +786,7 @@ resource "aws_db_instance" "postgres" {
   allocated_storage     = 20
   storage_type          = "gp3"
   max_allocated_storage = 100
-
+  deletion_protection = true 
   db_name                = var.db_name
   username               = var.db_user
   password               = var.db_password
@@ -779,7 +801,9 @@ resource "aws_db_instance" "postgres" {
   deletion_protection        = false
   skip_final_snapshot        = true
   apply_immediately          = true
-
+  lifecycle {
+    prevent_destroy = true      # <-- Terraform will abort the plan if this resource would be destroyed
+  }
   tags = {
     Name = "animalert-postgres"
   }
