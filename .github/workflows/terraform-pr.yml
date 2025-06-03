@@ -1,9 +1,11 @@
 name: Terraform PR
+
 on: pull_request
+
 permissions:
-  id-token: write             # OIDC
+  id-token: write
   contents: read
-  pull-requests: write        # so we can comment the plan
+  pull-requests: write         # no security-events needed
 
 env:
   TF_IN_AUTOMATION: true
@@ -22,22 +24,33 @@ env:
 jobs:
   terraform-checks:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.6.x
 
-      # Acquire short‑lived AWS creds via OIDC
+      # Acquire short-lived AWS creds via OIDC
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GithubTerraformReadonly
           aws-region: ${{ env.AWS_REGION }}
 
-      # Formatting, lint, static analysis
-      #- run: terraform fmt -check -recursive
-      #- uses: terraform-linters/tflint-action@v2
-      #- run: tfsec .
+      # ---------------------------------------------------------------
+      # tfsec security scan – console output only, no SARIF upload
+      # ---------------------------------------------------------------
+      - name: tfsec – security scan
+        uses: aquasecurity/tfsec-action@v1.0.0
+        with:
+          # fail on MEDIUM or higher; tweak/append --soft-fail if desired
+          tfsec_args: --minimum-severity HIGH
+      # ---------------------------------------------------------------
+
+      # (optional) formatting / lint
+      # - run: terraform fmt -check -recursive
+      # - uses: terraform-linters/tflint-action@v2
 
       # Basic validation
       - run: terraform init
@@ -51,7 +64,7 @@ jobs:
           path: plan.out
       - run: terraform show -json plan.out > plan.json
 
-      # 6 — post (or update) the sticky PR comment
+      # Post (or update) the sticky PR comment with the plan
       - uses: liatrio/terraform-change-pr-commenter@v1.4.0
         with:
           json-file: plan.json
