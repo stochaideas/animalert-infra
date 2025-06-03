@@ -831,7 +831,11 @@ resource "aws_wafv2_web_acl" "alb_waf" {
   description = "WAF protecting the ALB"
   scope       = "REGIONAL"                   # use CLOUDFRONT for edge-wide ACLs
 
-  default_action { allow {} }
+  default_action {
+      allow {
+      
+      } 
+  }
 
   visibility_config {
     cloudwatch_metrics_enabled = true
@@ -880,7 +884,11 @@ resource "aws_wafv2_web_acl" "alb_waf" {
       }
     }
 
-    override_action { none {} }
+    override_action { 
+      none {
+      
+      } 
+    }
 
     visibility_config {
       cloudwatch_metrics_enabled = true
@@ -900,7 +908,11 @@ resource "aws_wafv2_web_acl" "alb_waf" {
       }
     }
 
-    override_action { none {} }
+    override_action { 
+    none {
+    
+    }
+  }
 
     visibility_config {
       cloudwatch_metrics_enabled = true
@@ -920,7 +932,11 @@ resource "aws_wafv2_web_acl" "alb_waf" {
       }
     }
 
-    override_action { none {} }
+    override_action { 
+      none {
+      
+          } 
+    }
 
     visibility_config {
       cloudwatch_metrics_enabled = true
