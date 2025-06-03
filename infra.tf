@@ -30,6 +30,7 @@ variable "tls_domain" {
 
 variable "db_name" {
   type = string
+  default = "my_app_db"
 }
 
 variable "db_user" {
@@ -326,16 +327,19 @@ resource "aws_security_group" "db_sg" {
 ###############################################################################
 # 7. Application Load Balancer
 ###############################################################################
+
 resource "aws_lb" "app_lb" {
   name               = "my-app-lb"
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb_sg.id]
   subnets            = local.public_subnets
-
   access_logs {
     bucket  = aws_s3_bucket.logs.bucket
     prefix  = "alb-access-logs"
     enabled = true
+  }
+  lifecycle {
+    prevent_destroy = true      
   }
 }
 
@@ -356,6 +360,7 @@ resource "aws_lb_target_group" "app_tg" {
   }
 }
 
+# HTTPS listener (production)
 resource "aws_lb_listener" "https" {
   load_balancer_arn = aws_lb.app_lb.arn
   port              = 443
@@ -366,6 +371,23 @@ resource "aws_lb_listener" "https" {
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.app_tg.arn
+  }
+}
+
+# HTTP listener that redirects to HTTPS
+resource "aws_lb_listener" "http_redirect" {
+  load_balancer_arn = aws_lb.app_lb.arn
+  port              = 80
+  protocol          = "HTTP"
+
+  default_action {
+    type = "redirect"
+
+    redirect {
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
+    }
   }
 }
 
@@ -712,7 +734,9 @@ resource "aws_ecs_service" "web_app_service" {
     container_name   = "web-app"
     container_port   = 3000
   }
-
+  lifecycle {
+    prevent_destroy = true      
+  }
   depends_on = [
     aws_lb_listener.https
   ]
@@ -750,7 +774,7 @@ resource "aws_ecs_service" "web_app_service_stage" {
 resource "aws_db_subnet_group" "postgres" {
   name       = "animalert-db-subnet-group"
   subnet_ids = local.private_subnets
-
+  
   tags = {
     Name = "animalert-db-subnet-group"
   }
@@ -764,7 +788,7 @@ resource "aws_db_instance" "postgres" {
   allocated_storage     = 20
   storage_type          = "gp3"
   max_allocated_storage = 100
-
+  deletion_protection = true 
   db_name                = var.db_name
   username               = var.db_user
   password               = var.db_password
@@ -776,10 +800,8 @@ resource "aws_db_instance" "postgres" {
 
   backup_retention_period    = 7
   auto_minor_version_upgrade = true
-  deletion_protection        = false
   skip_final_snapshot        = true
   apply_immediately          = true
-
   tags = {
     Name = "animalert-postgres"
   }
@@ -801,18 +823,19 @@ output "rds_db_name" {
 }
 
 ###############################################################################
-# 15. AWS WAF v2 – Web ACL + Bot Control
+# 15. AWS WAF v2 – Web ACL + Bot Control + Global Rate Limit
 ###############################################################################
+
 resource "aws_wafv2_web_acl" "alb_waf" {
   name        = "animalert-alb-waf"
   description = "WAF protecting the ALB"
-  scope       = "REGIONAL"
+  scope       = "REGIONAL"                   # use CLOUDFRONT for edge-wide ACLs
 
   default_action {
-    allow {
-
-    } 
-}
+      allow {
+      
+      } 
+  }
 
   visibility_config {
     cloudwatch_metrics_enabled = true
@@ -820,9 +843,39 @@ resource "aws_wafv2_web_acl" "alb_waf" {
     sampled_requests_enabled   = true
   }
 
+  # ────────────────────────── ❶ Global rate-based rule ──────────────────────────
+  rule {
+    name     = "Global-IP-RateLimit"
+    priority = 0                      # evaluate first
+
+    action {
+      block {}                        # or captcha / challenge / count
+    }
+
+    statement {
+      rate_based_statement {
+        limit              = 500     # requests per 5-minute window
+        aggregate_key_type = "IP"     # count per source IPv4/IPv6 address
+
+        # (Recommended) respect the real client IP when behind ALB/CF
+        forwarded_ip_config {
+          header_name       = "X-Forwarded-For"
+          fallback_behavior = "MATCH"
+        }
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "ip-rate-limit"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  # ────────────────────────── ❷ AWS-managed rule groups ─────────────────────────
   rule {
     name     = "AWS-AWSManagedRulesCommonRuleSet"
-    priority = 0
+    priority = 1
 
     statement {
       managed_rule_group_statement {
@@ -833,7 +886,7 @@ resource "aws_wafv2_web_acl" "alb_waf" {
 
     override_action { 
       none {
-
+      
       } 
     }
 
@@ -846,7 +899,7 @@ resource "aws_wafv2_web_acl" "alb_waf" {
 
   rule {
     name     = "AWS-AWSManagedRulesKnownBadInputsRuleSet"
-    priority = 1
+    priority = 2
 
     statement {
       managed_rule_group_statement {
@@ -855,11 +908,11 @@ resource "aws_wafv2_web_acl" "alb_waf" {
       }
     }
 
-    override_action {
-      none {
-      
-      }
+    override_action { 
+    none {
+    
     }
+  }
 
     visibility_config {
       cloudwatch_metrics_enabled = true
@@ -870,7 +923,7 @@ resource "aws_wafv2_web_acl" "alb_waf" {
 
   rule {
     name     = "AWS-AWSManagedRulesBotControlRuleSet"
-    priority = 2
+    priority = 3
 
     statement {
       managed_rule_group_statement {
@@ -879,10 +932,10 @@ resource "aws_wafv2_web_acl" "alb_waf" {
       }
     }
 
-    override_action {
+    override_action { 
       none {
-    
-      } 
+      
+          } 
     }
 
     visibility_config {
@@ -893,11 +946,11 @@ resource "aws_wafv2_web_acl" "alb_waf" {
   }
 }
 
-# Attach the Web ACL to the ALB
 resource "aws_wafv2_web_acl_association" "alb_waf_assoc" {
   resource_arn = aws_lb.app_lb.arn
   web_acl_arn  = aws_wafv2_web_acl.alb_waf.arn
 }
+
 
 ###############################################################################
 # 16. (optional) WAF logging to the existing S3 “logs” bucket
