@@ -56,6 +56,11 @@ variable "email_pass" {
   sensitive = true
 }
 
+variable "email_pass_stage" {
+ type      = string
+  sensitive = true
+}
+
 variable "site_origin" {
   type    = string
   default = "https://anim-alert.org"
@@ -661,19 +666,19 @@ resource "aws_ecs_task_definition" "web_app_task_stage" {
         },
         {
           name  = "EMAIL_ADMIN",
-          value = "ancbp.cluj@gmail.com"
+          value = "darius.bogdan3080@gmail.com"
         },
         {
           name  = "EMAIL_USER",
-          value = "ancbp.cluj@gmail.com"
+          value = "darius.bogdan3080@gmail.com"
         },
         {
           name  = "EMAIL_PASS",
-          value = var.email_pass
+          value = var.email_pass_stage
         },
         {
           name  = "EMAIL_FROM",
-          value = "AnimAlert <ancbp.cluj@gmail.com>"
+          value = "AnimAlert <darius.bogdan3080@gmail.com>"
         }
       ],
 
