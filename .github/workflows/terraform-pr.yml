@@ -19,6 +19,7 @@ env:
   TF_VAR_google_api_id: "id"
   TF_VAR_google_api_key: "key123"
   TF_VAR_email_pass: "pass"
+  TF_VAR_email_pass_stage: "pass"
   AWS_REGION: eu-central-1
 
 jobs:
