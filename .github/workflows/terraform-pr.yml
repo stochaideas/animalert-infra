@@ -38,21 +38,7 @@ jobs:
         with:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GithubTerraformReadonly
           aws-region: ${{ env.AWS_REGION }}
-
-      # ---------------------------------------------------------------
-      # tfsec security scan – console output only, no SARIF upload
-      # ---------------------------------------------------------------
-      - name: tfsec – security scan
-        uses: aquasecurity/tfsec-action@v1.0.0
-        with:
-          # fail on MEDIUM or higher; tweak/append --soft-fail if desired
-          tfsec_args: --minimum-severity HIGH
-      # ---------------------------------------------------------------
-
-      # (optional) formatting / lint
-      # - run: terraform fmt -check -recursive
-      # - uses: terraform-linters/tflint-action@v2
-
+  
       # Basic validation
       - run: terraform init
       - run: terraform validate
@@ -64,6 +50,15 @@ jobs:
           name: tf-plan
           path: plan.out
       - run: terraform show -json plan.out > plan.json
+           # ---------------------------------------------------------------
+      # tfsec security scan – console output only, no SARIF upload
+      # ---------------------------------------------------------------
+      - name: tfsec – security scan
+        uses: aquasecurity/tfsec-action@v1.0.0
+        with:
+          # fail on MEDIUM or higher; tweak/append --soft-fail if desired
+          tfsec_args: --minimum-severity HIGH
+      # ---------------------------------------------------------------
 
       # Post (or update) the sticky PR comment with the plan
       - uses: liatrio/terraform-change-pr-commenter@v1.4.0
