@@ -650,6 +650,10 @@ resource "aws_ecs_task_definition" "web_app_task_stage" {
           value = "animalert-images"
         },
         {
+          name  = "NODE_ENV",
+          value = "test"
+        },
+        {
           name  = "DATABASE_URL",
           value = format(
             "postgresql://%s:%s@%s:%s/%s?sslmode=require",
