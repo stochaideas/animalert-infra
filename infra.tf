@@ -17,7 +17,10 @@ terraform {
 provider "aws" {
   region = var.aws_region
 }
-
+variable "phone_recipients" {
+  type    = list(string)
+  default = ["+40741028697"]   # E.164 format
+}
 variable "aws_region" {
   type    = string
   default = "eu-central-1"
@@ -1004,13 +1007,8 @@ resource "aws_sns_sms_preferences" "global" {
 }
 # These attributes map 1-to-1 with the console settings :contentReference[oaicite:0]{index=0}
 
-variable "recipients" {
-  type    = list(string)
-  default = ["+14165550123"]   # E.164 format
-}
-
 resource "aws_sns_topic_subscription" "sms" {
-  for_each  = toset(var.recipients)
+  for_each  = toset(var.phone_recipients)
   topic_arn = aws_sns_topic.sms_alerts.arn
   protocol  = "sms"
   endpoint  = each.key
