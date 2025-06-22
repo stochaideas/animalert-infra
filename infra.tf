@@ -984,13 +984,13 @@ resource "aws_wafv2_web_acl_association" "alb_waf_assoc" {
 
 
 ###############################################################################
-# 16. (optional) WAF logging to the existing S3 “logs” bucket
+# 16. (disable currently) WAF logging to the existing S3 “logs” bucket
 ###############################################################################
 
- resource "aws_wafv2_web_acl_logging_configuration" "alb_waf_logging" {
-   resource_arn            = aws_wafv2_web_acl.alb_waf.arn
-   log_destination_configs = ["${aws_s3_bucket.logs.arn}"]
-}
+ #resource "aws_wafv2_web_acl_logging_configuration" "alb_waf_logging" {
+ #  resource_arn            = aws_wafv2_web_acl.alb_waf.arn
+ #  log_destination_configs = ["${aws_s3_bucket.logs.arn}"]
+#}
 
 
 ############################################################
