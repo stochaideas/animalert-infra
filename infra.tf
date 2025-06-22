@@ -17,7 +17,10 @@ terraform {
 provider "aws" {
   region = var.aws_region
 }
-
+variable "phone_recipients" {
+  type    = list(string)
+  default = ["+40741028697"]   # E.164 format
+}
 variable "aws_region" {
   type    = string
   default = "eu-central-1"
@@ -609,7 +612,12 @@ resource "aws_ecs_task_definition" "web_app_task" {
         {
           name  = "EMAIL_FROM",
           value = "AnimAlert <ancbp.cluj@gmail.com>"
+        },
+        {
+          name  = "SNS_TOPIC_ARN"
+          value = aws_sns_topic.sms_alerts.arn
         }
+
       ],
 
       logConfiguration = {
@@ -714,7 +722,12 @@ resource "aws_ecs_task_definition" "web_app_task_stage" {
         {
           name  = "EMAIL_FROM",
           value = "AnimAlert <darius.bogdan3080@gmail.com>"
+        },
+        {
+          name  = "SNS_TOPIC_ARN"
+          value = aws_sns_topic.sms_alerts.arn
         }
+
       ],
 
       logConfiguration = {
@@ -973,13 +986,69 @@ resource "aws_wafv2_web_acl_association" "alb_waf_assoc" {
 ###############################################################################
 # 16. (optional) WAF logging to the existing S3 “logs” bucket
 ###############################################################################
-# Uncomment if you’d like raw JSON logs:
-#
-# resource "aws_wafv2_web_acl_logging_configuration" "alb_waf_logging" {
-#   resource_arn            = aws_wafv2_web_acl.alb_waf.arn
-#   log_destination_configs = [aws_s3_bucket.logs.arn]
-# }
 
-###############################################################################
-# END OF FILE
-###############################################################################
+ resource "aws_wafv2_web_acl_logging_configuration" "alb_waf_logging" {
+   resource_arn            = aws_wafv2_web_acl.alb_waf.arn
+   log_destination_configs = [aws_s3_bucket.logs.arn]
+}
+
+
+############################################################
+# 17. AWS SNS
+############################################################
+resource "aws_sns_topic" "sms_alerts" {
+  name = "sms-alerts"
+}
+
+resource "aws_sns_sms_preferences" "global" {
+  default_sms_type  = "Transactional"     # or "Promotional"
+  default_sender_id = "MyApp"             # 1–11 alphanumeric chars
+  monthly_spend_limit = "20"              # USD
+}
+# These attributes map 1-to-1 with the console settings :contentReference[oaicite:0]{index=0}
+
+resource "aws_sns_topic_subscription" "sms" {
+  for_each  = toset(var.phone_recipients)
+  topic_arn = aws_sns_topic.sms_alerts.arn
+  protocol  = "sms"
+  endpoint  = each.key
+}
+
+data "aws_iam_policy_document" "sns_publish" {
+  statement {
+    actions   = ["sns:Publish"]
+    resources = [aws_sns_topic.sms_alerts.arn]
+  }
+}
+
+resource "aws_iam_policy" "sns_publish" {
+  name   = "sns-publish-sms-alerts"
+  policy = data.aws_iam_policy_document.sns_publish.json
+}
+
+output "sms_topic_arn" {
+  value = aws_sns_topic.sms_alerts.arn
+}
+
+############################################################
+# IAM policy that allows sns:Publish on ONE topic
+############################################################
+data "aws_iam_policy_document" "ecs_task_publish_sns" {
+  statement {
+    sid       = "AllowPublishToSmsAlerts"
+    effect    = "Allow"
+    actions   = ["sns:Publish"]
+    resources = [aws_sns_topic.sms_alerts.arn]   # <- your topic
+  }
+}
+
+resource "aws_iam_policy" "ecs_task_publish_sns" {
+  name   = "ecs-task-publish-sms-alerts"
+  policy = data.aws_iam_policy_document.ecs_task_publish_sns.json
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_task_role_publish_sns" {
+  role       = aws_iam_role.ecs_task_role.name
+  policy_arn = aws_iam_policy.ecs_task_publish_sns.arn
+}
+
