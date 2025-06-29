@@ -1069,3 +1069,92 @@ resource "aws_iam_role_policy_attachment" "ecs_task_role_publish_sns" {
   policy_arn = aws_iam_policy.ecs_task_publish_sns.arn
 }
 
+# ECS task definitions – **Drizzle migrations** (one-shot)
+###############################################################################
+# ───────────── Production ─────────────
+resource "aws_ecs_task_definition" "db_migrate_task" {
+  family                   = "animalert-db-migrate-task"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = 256
+  memory                   = 512
+  execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
+  task_role_arn            = aws_iam_role.ecs_task_role.arn
+
+  container_definitions = jsonencode([
+    {
+      name      = "db-migrate",
+      image     = "${aws_ecr_repository.web_app_repo.repository_url}:migrate_latest",
+      essential = true,
+
+      command   = ["pnpm","dlx","drizzle-kit","migrate","--yes"],
+
+      environment = [
+        {
+          name  = "DATABASE_URL",
+          value = format(
+            "postgresql://%s:%s@%s:%s/%s?sslmode=require",
+            var.db_user,
+            var.db_password,
+            aws_db_instance.postgres.address,
+            tostring(aws_db_instance.postgres.port),
+            var.db_name
+          )
+        }
+      ],
+
+      logConfiguration = {
+        logDriver = "awslogs",
+        options = {
+          awslogs-group         = aws_cloudwatch_log_group.web_app_lg.name,
+          awslogs-region        = var.aws_region,
+          awslogs-stream-prefix = "db-migrate"
+        }
+      }
+    }
+  ])
+}
+
+# ───────────── Staging ─────────────
+resource "aws_ecs_task_definition" "db_migrate_task_stage" {
+  family                   = "animalert-db-migrate-task-stage"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = 256
+  memory                   = 512
+  execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
+  task_role_arn            = aws_iam_role.ecs_task_role.arn
+
+  container_definitions = jsonencode([
+    {
+      name      = "db-migrate-stage",
+      image     = "${aws_ecr_repository.web_app_repo.repository_url}:migrate_latest_stage",
+      essential = true,
+      command   = ["pnpm","dlx","drizzle-kit","migrate","--yes"],
+
+      environment = [
+        {
+          name  = "DATABASE_URL",
+          value = format(
+            "postgresql://%s:%s@%s:%s/%s?sslmode=require",
+            var.db_user,
+            var.db_password,
+            aws_db_instance.postgres.address,
+            tostring(aws_db_instance.postgres.port),
+            var.db_name_stage
+          )
+        }
+      ],
+
+      logConfiguration = {
+        logDriver = "awslogs",
+        options = {
+          awslogs-group         = aws_cloudwatch_log_group.web_app_lg.name,
+          awslogs-region        = var.aws_region,
+          awslogs-stream-prefix = "db-migrate-stage"
+        }
+      }
+    }
+  ])
+}
+
