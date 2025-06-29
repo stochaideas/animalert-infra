@@ -619,7 +619,7 @@ resource "aws_ecs_task_definition" "web_app_task" {
         },
         {  
           name = "NODE_ENV",
-          value "production"
+          value = "production"
         },
         {
           name  = "SNS_TOPIC_ARN"
