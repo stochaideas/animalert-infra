@@ -21,6 +21,10 @@ variable "phone_recipients" {
   type    = list(string)
   default = ["+40741028697"]   # E.164 format
 }
+variable "phone_recipients_stage" {
+  type    = list(string)
+  default = ["+40741028697"]   # E.164 format
+}
 variable "aws_region" {
   type    = string
   default = "eu-central-1"
@@ -613,6 +617,10 @@ resource "aws_ecs_task_definition" "web_app_task" {
           name  = "EMAIL_FROM",
           value = "AnimAlert <ancbp.cluj@gmail.com>"
         },
+        {  
+          name = "NODE_ENV",
+          value "production"
+        },
         {
           name  = "SNS_TOPIC_ARN"
           value = aws_sns_topic.sms_alerts.arn
@@ -725,7 +733,7 @@ resource "aws_ecs_task_definition" "web_app_task_stage" {
         },
         {
           name  = "SNS_TOPIC_ARN"
-          value = aws_sns_topic.sms_alerts.arn
+          value = aws_sns_topic.sms_alerts_stage.arn
         }
 
       ],
@@ -1024,7 +1032,7 @@ resource "aws_sns_topic_subscription" "sms" {
 data "aws_iam_policy_document" "sns_publish" {
   statement {
     actions   = ["sns:Publish"]
-    resources = [aws_sns_topic.sms_alerts.arn]
+    resources = [aws_sns_topic.sms_alerts.arn, aws_sns_topic.sms_alerts_stage.arn]
   }
 }
 
@@ -1036,7 +1044,9 @@ resource "aws_iam_policy" "sns_publish" {
 output "sms_topic_arn" {
   value = aws_sns_topic.sms_alerts.arn
 }
-
+output "sms_topic_arn_stage" {
+  value = aws_sns_topic.sms_alerts_stage.arn
+}
 ############################################################
 # IAM policy that allows sns:Publish on ONE topic
 ############################################################
@@ -1045,7 +1055,7 @@ data "aws_iam_policy_document" "ecs_task_publish_sns" {
     sid       = "AllowPublishToSmsAlerts"
     effect    = "Allow"
     actions   = ["sns:Publish"]
-    resources = [aws_sns_topic.sms_alerts.arn]   # <- your topic
+    resources = [aws_sns_topic.sms_alerts.arn, aws_sns_topic.sms_alerts_stage.arn]   # <- your topic
   }
 }
 
