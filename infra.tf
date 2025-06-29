@@ -1023,7 +1023,7 @@ resource "aws_sns_topic_subscription" "sms" {
   protocol  = "sms"
   endpoint  = each.key
 }
-resource "aws_sns_topic_subscription" "sms" {
+resource "aws_sns_topic_subscription" "sms_stage" {
   for_each  = toset(var.phone_recipients_stage)
   topic_arn = aws_sns_topic.sms_alerts_stage.arn
   protocol  = "sms"
