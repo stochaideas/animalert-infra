@@ -107,7 +107,12 @@ data "aws_acm_certificate" "selected" {
   most_recent = true
   types       = ["AMAZON_ISSUED"]
 }
-
+data "aws_acm_certificate" "eco" {
+  domain      = "eco-alert.org"   # ⇦ new domain
+  statuses    = ["ISSUED"]
+  most_recent = true
+  types       = ["AMAZON_ISSUED"]
+}
 ###############################################################################
 # 3. Networking – VPC, subnets, NAT
 ###############################################################################
@@ -393,6 +398,11 @@ resource "aws_lb_listener" "https" {
     type             = "forward"
     target_group_arn = aws_lb_target_group.app_tg.arn
   }
+}
+
+resource "aws_lb_listener_certificate" "eco_cert" {
+  listener_arn    = aws_lb_listener.https.arn   # reuse the existing HTTPS listener
+  certificate_arn = data.aws_acm_certificate.eco.arn
 }
 
 # HTTP listener that redirects to HTTPS
