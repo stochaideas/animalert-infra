@@ -14,6 +14,10 @@ terraform {
 ###############################################################################
 # 1. Provider & variables
 ###############################################################################
+
+data "aws_security_group" "console_sg" {
+  id = "sg-0f11eaaeb0db450e5"        
+}
 provider "aws" {
   region = var.aws_region
 }
@@ -348,6 +352,16 @@ resource "aws_security_group" "db_sg" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
+}
+
+resource "aws_security_group_rule" "db_from_console_sg" {
+  type                     = "ingress"
+  description              = "Postgres from console-created EC2s"
+  from_port                = 5432
+  to_port                  = 5432
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.db_sg.id        # target (DB) SG
+  source_security_group_id = data.aws_security_group.console_sg.id
 }
 
 ###############################################################################
