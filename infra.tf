@@ -102,6 +102,16 @@ variable "stage_subdomain" {
   default = "stage.anim-alert.org"
 }
 
+variable "clerk_publish_key_stage" {
+  type = string
+  default = "CLERK_K3Y"
+}
+
+variable "clerk_secret_key_stage" {
+  type = string
+  default = "CLERK_K3Y33"
+}
+
 ###############################################################################
 # 2. ACM certificate
 ###############################################################################
@@ -741,23 +751,31 @@ resource "aws_ecs_task_definition" "web_app_task_stage" {
         },
         {
           name  = "EMAIL_ADMIN",
-          value = "darius.bogdan3080@gmail.com"
+          value = "animalert@googlegroups.com"
         },
         {
           name  = "EMAIL_USER",
-          value = "darius.bogdan3080@gmail.com"
+          value = "ancbp.cluj@gmail.com"
         },
         {
           name  = "EMAIL_PASS",
-          value = var.email_pass_stage
+          value = var.email_pass
         },
         {
           name  = "EMAIL_FROM",
-          value = "AnimAlert <darius.bogdan3080@gmail.com>"
+          value = "AnimAlert Staging <ancbp.cluj@gmail.com>"
         },
         {
           name  = "SNS_TOPIC_ARN"
           value = aws_sns_topic.sms_alerts_stage.arn
+        },
+        {
+          name = "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY",
+          value = var.clerk_publish_key_stage
+        },
+        {
+          name = "CLERK_SECRET_KEY",
+          value = var.clerk_secret_key_stage
         }
 
       ],
