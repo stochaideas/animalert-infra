@@ -73,6 +73,8 @@ jobs:
           TF_VAR_google_api_key: ${{ secrets.GOOGLE_MAPS_API_KEY }}
           TF_VAR_email_pass: ${{ secrets.EMAIL_PASS }}
           TF_VAR_email_pass_stage: ${{ secrets.EMAIL_PASS_STAGE }}
+          TF_VAR_clerk_publish_key_stage: ${{ secrets.CLERK_PUBLISH_KEY_STAGE }}
+          TF_VAR_clerk_secret_key_stage: ${{ secrets.CLERK_SECRET_KEY_STAGE }} 
     steps:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
