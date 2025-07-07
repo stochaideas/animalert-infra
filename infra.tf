@@ -88,7 +88,15 @@ variable "local_origin" {
   type    = string
   default = "http://localhost:3000"
 }
+variable "clerk_publish_key_prod" {
+  type = string
+  default = "CLERK_K3Y"
+}
 
+variable "clerk_secret_key_prod" {
+  type = string
+  default = "CLERK_K3Y33"
+}
 # --------------------------------
 # NEW VARIABLES FOR STAGING
 # --------------------------------
@@ -658,6 +666,14 @@ resource "aws_ecs_task_definition" "web_app_task" {
         {
           name  = "SNS_TOPIC_ARN"
           value = aws_sns_topic.sms_alerts.arn
+        },
+        {
+          name = "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY",
+          value = var.clerk_publish_key_prod
+        },
+        {
+          name = "CLERK_SECRET_KEY",
+          value = var.clerk_secret_key_prod
         }
 
       ],
