@@ -75,6 +75,8 @@ jobs:
           TF_VAR_email_pass_stage: ${{ secrets.EMAIL_PASS_STAGE }}
           TF_VAR_clerk_publish_key_stage: ${{ secrets.CLERK_PUBLISH_KEY_STAGE }}
           TF_VAR_clerk_secret_key_stage: ${{ secrets.CLERK_SECRET_KEY_STAGE }} 
+          TF_VAR_clerk_publish_key_prod: ${{ secrets.CLERK_PUBLISH_KEY_PROD }}
+          TF_VAR_clerk_secret_key_prod: ${{ secrets.CLERK_SECRET_KEY_PROD }} 
     steps:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
