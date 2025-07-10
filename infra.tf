@@ -244,6 +244,25 @@ resource "aws_s3_bucket" "backups" {
   bucket = "animalert-backups"
 }
 
+resource "aws_s3_bucket" "images_stage" {
+  bucket = "animalert-images-stage"
+}
+
+resource "aws_s3_bucket" "logs_stage" {
+  bucket = "animalert-logs-stage"
+}
+
+resource "aws_s3_bucket" "backups_stage" {
+  bucket = "animalert-backups-stage"
+}
+
+resource "aws_s3_bucket" "reports_stage" {
+  bucket = "animalert-reports-stage"
+}
+resource "aws_s3_bucket" "reports_stage" {
+  bucket = "animalert-reports"
+}
+
 data "aws_caller_identity" "current" {}
 
 resource "aws_s3_bucket_policy" "logs_allow_alb" {
@@ -283,8 +302,6 @@ resource "aws_s3_bucket_cors_configuration" "cors" {
     allowed_methods = ["PUT", "POST", "GET", "HEAD"]
     allowed_origins = [
       var.site_origin,
-      var.local_origin,
-      var.stage_origin
     ]
     allowed_headers = ["*"]
     expose_headers  = ["ETag"]
