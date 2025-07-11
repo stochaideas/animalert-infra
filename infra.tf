@@ -232,35 +232,186 @@ locals {
 ###############################################################################
 # 4. S3 buckets (images, logs, backups)
 ###############################################################################
+resource "aws_kms_key" "s3_default" {
+  description             = "CMK for S3 default encryption (Animalert buckets)"
+  enable_key_rotation     = true
+  deletion_window_in_days = 30
+}
+
 resource "aws_s3_bucket" "images" {
   bucket = "animalert-images"
+
+  server_side_encryption_configuration {
+    rule {
+      apply_server_side_encryption_by_default {
+        sse_algorithm     = "aws:kms"
+        kms_master_key_id = aws_kms_key.s3_default.id
+      }
+    }
+  }
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+
+  versioning { enabled = true }
+
+  lifecycle { prevent_destroy = true }
 }
 
 resource "aws_s3_bucket" "logs" {
   bucket = "animalert-logs"
+
+  server_side_encryption_configuration {
+    rule {
+      apply_server_side_encryption_by_default {
+        sse_algorithm     = "aws:kms"
+        kms_master_key_id = aws_kms_key.s3_default.id
+      }
+    }
+  }
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+
+  versioning { enabled = true }
+
+  lifecycle { prevent_destroy = true }
 }
 
 resource "aws_s3_bucket" "backups" {
   bucket = "animalert-backups"
+
+  server_side_encryption_configuration {
+    rule {
+      apply_server_side_encryption_by_default {
+        sse_algorithm     = "aws:kms"
+        kms_master_key_id = aws_kms_key.s3_default.id
+      }
+    }
+  }
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+
+  versioning { enabled = true }
+
+  lifecycle { prevent_destroy = true }
 }
 
 resource "aws_s3_bucket" "images_stage" {
   bucket = "animalert-images-stage"
+
+  server_side_encryption_configuration {
+    rule {
+      apply_server_side_encryption_by_default {
+        sse_algorithm     = "aws:kms"
+        kms_master_key_id = aws_kms_key.s3_default.id
+      }
+    }
+  }
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+
+  versioning { enabled = true }
+
+  lifecycle { prevent_destroy = true }
 }
 
 resource "aws_s3_bucket" "logs_stage" {
   bucket = "animalert-logs-stage"
+
+  server_side_encryption_configuration {
+    rule {
+      apply_server_side_encryption_by_default {
+        sse_algorithm     = "aws:kms"
+        kms_master_key_id = aws_kms_key.s3_default.id
+      }
+    }
+  }
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+
+  versioning { enabled = true }
+
+  lifecycle { prevent_destroy = true }
 }
 
 resource "aws_s3_bucket" "backups_stage" {
   bucket = "animalert-backups-stage"
+
+  server_side_encryption_configuration {
+    rule {
+      apply_server_side_encryption_by_default {
+        sse_algorithm     = "aws:kms"
+        kms_master_key_id = aws_kms_key.s3_default.id
+      }
+    }
+  }
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+
+  versioning { enabled = true }
+
+  lifecycle { prevent_destroy = true }
 }
 
-resource "aws_s3_bucket" "reports_stage" {
-  bucket = "animalert-reports-stage"
+resource "aws_s3_bucket" "pdf_stage" {
+  bucket = "animalert-pdfs-stage"
+
+  server_side_encryption_configuration {
+    rule {
+      apply_server_side_encryption_by_default {
+        sse_algorithm     = "aws:kms"
+        kms_master_key_id = aws_kms_key.s3_default.id
+      }
+    }
+  }
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+
+  versioning { enabled = true }
+
+  lifecycle { prevent_destroy = true }
 }
-resource "aws_s3_bucket" "reports_stage" {
-  bucket = "animalert-reports"
+
+resource "aws_s3_bucket" "pdfs" {
+  bucket = "animalert-pdfs"
+
+  server_side_encryption_configuration {
+    rule {
+      apply_server_side_encryption_by_default {
+        sse_algorithm     = "aws:kms"
+        kms_master_key_id = aws_kms_key.s3_default.id
+      }
+    }
+  }
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+
+  versioning { enabled = true }
+
+  lifecycle { prevent_destroy = true }
 }
 
 data "aws_caller_identity" "current" {}
