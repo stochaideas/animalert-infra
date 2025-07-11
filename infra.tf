@@ -1072,6 +1072,95 @@ resource "aws_db_instance" "postgres" {
   }
 }
 
+
+###NEW DB###
+
+resource "aws_kms_key" "rds" {
+  description             = "KMS key for RDS at-rest encryption (animalert)"
+  deletion_window_in_days = 10
+  enable_key_rotation     = true
+
+  tags = {
+    Name = "animalert-rds-key"
+  }
+}
+
+resource "aws_kms_alias" "rds" {
+  name          = "alias/animalert/rds"
+  target_key_id = aws_kms_key.rds.key_id
+}
+
+resource "random_password" "rds" {
+  length  = 32
+  special = true
+}
+
+resource "aws_secretsmanager_secret" "rds_master" {
+  name                    = "animalert/postgres/master"
+  description             = "Master credentials for animalert Postgres"
+  recovery_window_in_days = 7
+  kms_key_id              = aws_kms_key.rds.arn
+}
+
+resource "aws_secretsmanager_secret_version" "rds_master" {
+  secret_id     = aws_secretsmanager_secret.rds_master.id
+  secret_string = jsonencode({
+    username = var.db_user
+    password = random_password.rds.result
+  })
+}
+
+resource "aws_db_parameter_group" "postgres" {
+  name        = "animalert-postgres-params"
+  family      = "postgres17"
+  description = "Enforce SSL and raise security posture"
+
+  parameter {
+    name  = "rds.force_ssl"
+    value = "1"
+  }
+}
+
+resource "aws_db_instance" "postgres" {
+  identifier                          = "animalert-postgres-prod"
+  engine                              = "postgres"
+  engine_version                      = "17.6"
+  instance_class                      = "db.t4g.micro"
+  allocated_storage                   = 20
+  storage_type                        = "gp3"
+  max_allocated_storage               = 100
+  deletion_protection                 = true
+  db_name                             = var.db_name
+  username                            = var.db_user
+  password                            = random_password.rds.result
+  port                                = 5432
+  publicly_accessible                 = false
+  multi_az                            = true
+  vpc_security_group_ids              = [aws_security_group.db_sg.id]
+  db_subnet_group_name                = aws_db_subnet_group.postgres.name
+  kms_key_id                          = aws_kms_key.rds.arn
+  storage_encrypted                   = true
+  iam_database_authentication_enabled = true
+  parameter_group_name                = aws_db_parameter_group.postgres.name
+  ca_cert_identifier                  = "rds-ca-ecc384-g1"
+  backup_retention_period             = 7
+  auto_minor_version_upgrade          = true
+  skip_final_snapshot                 = true
+  apply_immediately                   = true
+
+  tags = {
+    Name = "animalert-postgres-prod"
+  }
+}
+
+output "db_credentials_secret_arn" {
+  description = "ARN of the Secrets Manager secret holding the master credentials"
+  value       = aws_secretsmanager_secret.rds_master.arn
+  sensitive   = true
+}
+
+
+
 ###############################################################################
 # 14. Outputs
 ###############################################################################
