@@ -250,11 +250,6 @@ resource "aws_s3_bucket" "images" {
     }
   }
 
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-
   versioning { enabled = true }
 
   lifecycle { prevent_destroy = true }
@@ -271,11 +266,6 @@ resource "aws_s3_bucket" "logs" {
       }
     }
   }
-
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
 
   versioning { enabled = true }
 
@@ -294,11 +284,6 @@ resource "aws_s3_bucket" "backups" {
     }
   }
 
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-
   versioning { enabled = true }
 
   lifecycle { prevent_destroy = true }
@@ -315,11 +300,6 @@ resource "aws_s3_bucket" "images_stage" {
       }
     }
   }
-
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
 
   versioning { enabled = true }
 
@@ -338,11 +318,6 @@ resource "aws_s3_bucket" "logs_stage" {
     }
   }
 
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-
   versioning { enabled = true }
 
   lifecycle { prevent_destroy = true }
@@ -359,11 +334,6 @@ resource "aws_s3_bucket" "backups_stage" {
       }
     }
   }
-
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
 
   versioning { enabled = true }
 
@@ -382,11 +352,6 @@ resource "aws_s3_bucket" "pdf_stage" {
     }
   }
 
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-
   versioning { enabled = true }
 
   lifecycle { prevent_destroy = true }
@@ -404,15 +369,37 @@ resource "aws_s3_bucket" "pdfs" {
     }
   }
 
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-
   versioning { enabled = true }
 
   lifecycle { prevent_destroy = true }
 }
+
+locals {
+  protected_buckets = [
+    aws_s3_bucket.images,
+    aws_s3_bucket.logs,
+    aws_s3_bucket.backups,
+    aws_s3_bucket.pdfs,
+    aws_s3_bucket.images_stage,
+    aws_s3_bucket.logs_stage,
+    aws_s3_bucket.backups_stage,
+    aws_s3_bucket.pdf_stage,
+  ]
+}
+
+resource "aws_s3_bucket_public_access_block" "protected" {
+  for_each = {
+    for b in local.protected_buckets : b.id => b
+  }
+
+  bucket = each.value.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
 
 data "aws_caller_identity" "current" {}
 
