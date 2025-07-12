@@ -344,7 +344,7 @@ resource "aws_s3_bucket" "pdf_stage" {
 }
 
 resource "aws_s3_bucket" "pdfs" {
-  bucket = "animalert-pdfs"
+  bucket = "animalert-pdfs-prod"
 
   server_side_encryption_configuration {
     rule {
@@ -965,7 +965,7 @@ resource "aws_ecs_task_definition" "web_app_task" {
         },
         {
           name = "AWS_S3_PDF_BUCKET_NAME",
-          value = "animalert-pdfs"
+          value = "animalert-pdfs-prod"
         }
 
       ],
@@ -1447,6 +1447,73 @@ resource "aws_wafv2_web_acl_association" "alb_waf_assoc" {
 ############################################################
 # 17. AWS SNS
 ############################################################
+
+
+# 1. CloudWatch Logs group that will hold the delivery records
+resource "aws_cloudwatch_log_group" "sms_delivery" {
+  name              = "/aws/sns/sms-delivery"
+  retention_in_days = 30           # keep 30 days; adjust to taste
+}
+
+data "aws_iam_policy_document" "sns_logs_trust" {
+  statement {
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["sns.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "sns_delivery_status" {
+  name               = "snsSmsDeliveryStatus"
+  assume_role_policy = data.aws_iam_policy_document.sns_logs_trust.json
+}
+
+data "aws_iam_policy_document" "sns_logs_write" {
+  statement {
+    actions = [
+      "logs:CreateLogStream",
+      "logs:PutLogEvents"
+    ]
+    resources = [
+      "${aws_cloudwatch_log_group.sms_delivery.arn}:*"
+    ]
+  }
+}
+
+resource "aws_iam_role_policy" "sns_delivery_status" {
+  role   = aws_iam_role.sns_delivery_status.id
+  policy = data.aws_iam_policy_document.sns_logs_write.json
+}
+
+# 4. Account-wide SMS preferences — now with logging enabled
+resource "aws_sns_sms_preferences" "global" {
+  default_sms_type                      = "Promotional"   # keep your current values
+  default_sender_id                     = "AnimAlert"
+  monthly_spend_limit                   = "20"
+
+  # NEW: hook up the role & tell SNS what fraction of successes to log
+  delivery_status_iam_role_arn          = aws_iam_role.sns_delivery_status.arn
+  delivery_status_success_sampling_rate = 100  # 0-100 (%). 100 = log every success
+}
+
+#    Only needed if you want a *different* sampling-rate for one topic.
+resource "aws_sns_topic" "sms_alerts" {
+  name = "sms-alerts"
+
+  delivery_status_iam_role_arn          = aws_iam_role.sns_delivery_status.arn
+  delivery_status_success_sampling_rate = 100
+}
+
+resource "aws_sns_topic" "sms_alerts_stage" {
+  name = "sms-alerts-stage"
+
+  delivery_status_iam_role_arn          = aws_iam_role.sns_delivery_status.arn
+  delivery_status_success_sampling_rate = 100
+}
+
 resource "aws_sns_topic" "sms_alerts" {
   name = "sms-alerts"
 }
