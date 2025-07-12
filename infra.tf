@@ -358,25 +358,77 @@ resource "aws_s3_bucket" "pdfs" {
   lifecycle { prevent_destroy = true }
 }
 
-locals {
-  protected_buckets = [
-    aws_s3_bucket.images,
-    aws_s3_bucket.logs,
-    aws_s3_bucket.backups,
-    aws_s3_bucket.pdfs,
-    aws_s3_bucket.images_stage,
-    aws_s3_bucket.logs_stage,
-    aws_s3_bucket.backups_stage,
-    aws_s3_bucket.pdf_stage,
-  ]
+###############################################################################
+# S3 – block all public access on every bucket
+###############################################################################
+
+resource "aws_s3_bucket_public_access_block" "images" {
+  bucket = aws_s3_bucket.images.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
 }
 
-resource "aws_s3_bucket_public_access_block" "protected" {
-  for_each = {
-    for b in local.protected_buckets : b.id => b
-  }
+resource "aws_s3_bucket_public_access_block" "logs" {
+  bucket = aws_s3_bucket.logs.id
 
-  bucket = each.value.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_public_access_block" "backups" {
+  bucket = aws_s3_bucket.backups.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_public_access_block" "pdfs" {
+  bucket = aws_s3_bucket.pdfs.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# ─────────────── STAGE buckets ───────────────
+
+resource "aws_s3_bucket_public_access_block" "images_stage" {
+  bucket = aws_s3_bucket.images_stage.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_public_access_block" "logs_stage" {
+  bucket = aws_s3_bucket.logs_stage.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_public_access_block" "backups_stage" {
+  bucket = aws_s3_bucket.backups_stage.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_public_access_block" "pdf_stage" {
+  bucket = aws_s3_bucket.pdf_stage.id
 
   block_public_acls       = true
   block_public_policy     = true
