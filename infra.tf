@@ -1490,11 +1490,10 @@ resource "aws_iam_role_policy" "sns_delivery_status" {
 
 # 4. Account-wide SMS preferences — now with logging enabled
 resource "aws_sns_sms_preferences" "global" {
-  default_sms_type                      = "Promotional"   # keep your current values
+  default_sms_type                      = "Promotional"   
   default_sender_id                     = "AnimAlert"
   monthly_spend_limit                   = "20"
 
-  # NEW: hook up the role & tell SNS what fraction of successes to log
   delivery_status_iam_role_arn          = aws_iam_role.sns_delivery_status.arn
   delivery_status_success_sampling_rate = 100  # 0-100 (%). 100 = log every success
 }
@@ -1519,11 +1518,6 @@ resource "aws_sns_topic" "sms_alerts" {
 }
 resource "aws_sns_topic" "sms_alerts_stage" {
   name = "sms-alerts-stage"
-}
-resource "aws_sns_sms_preferences" "global" {
-  default_sms_type  = "Promotional"     # or "Promotional"
-  default_sender_id = "AnimAlert"             # 1–11 alphanumeric chars
-  monthly_spend_limit = "20"              # USD
 }
 # These attributes map 1-to-1 with the console settings :contentReference[oaicite:0]{index=0}
 
