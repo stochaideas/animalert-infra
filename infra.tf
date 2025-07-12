@@ -445,7 +445,7 @@ resource "aws_s3_bucket_cors_configuration" "cors_images_stage" {
   }
 }
 resource "aws_s3_bucket_cors_configuration" "cors_pdfs_stage" {
-  bucket = aws_s3_bucket.pdfs_stage.id
+  bucket = aws_s3_bucket.pdf_stage.id
   cors_rule {
     id              = "web-and-local"
     allowed_methods = ["PUT", "POST", "GET", "HEAD"]
