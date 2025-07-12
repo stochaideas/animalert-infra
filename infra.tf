@@ -1252,7 +1252,7 @@ resource "aws_db_parameter_group" "postgres" {
 resource "aws_db_instance" "postgres-production" {
   identifier                          = "animalert-postgres-prod"
   engine                              = "postgres"
-  engine_version                      = "17.6"
+  engine_version                      = "17"
   instance_class                      = "db.t4g.micro"
   allocated_storage                   = 20
   storage_type                        = "gp3"
