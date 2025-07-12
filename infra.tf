@@ -1227,7 +1227,6 @@ resource "aws_secretsmanager_secret" "rds_master" {
   name                    = "animalert/postgres/master"
   description             = "Master credentials for animalert Postgres"
   recovery_window_in_days = 7
-  kms_key_id              = aws_kms_key.rds.arn
 }
 
 resource "aws_secretsmanager_secret_version" "rds_master" {
@@ -1276,9 +1275,6 @@ resource "aws_db_instance" "postgres-production" {
   skip_final_snapshot                 = true
   apply_immediately                   = true
 
-  lifecycle {
-    prevent_destroy = true      
-  }
   tags = {
     Name = "animalert-postgres-prod"
   }
