@@ -344,7 +344,7 @@ resource "aws_s3_bucket" "pdf_stage" {
 }
 
 resource "aws_s3_bucket" "pdfs" {
-  bucket = "animalert-pdfs"
+  bucket = "animalert-pdfs-prod"
 
   server_side_encryption_configuration {
     rule {
@@ -965,7 +965,7 @@ resource "aws_ecs_task_definition" "web_app_task" {
         },
         {
           name = "AWS_S3_PDF_BUCKET_NAME",
-          value = "animalert-pdfs"
+          value = "animalert-pdfs-prod"
         }
 
       ],
@@ -1227,7 +1227,6 @@ resource "aws_secretsmanager_secret" "rds_master" {
   name                    = "animalert/postgres/master"
   description             = "Master credentials for animalert Postgres"
   recovery_window_in_days = 7
-  kms_key_id              = aws_kms_key.rds.arn
 }
 
 resource "aws_secretsmanager_secret_version" "rds_master" {
@@ -1447,17 +1446,72 @@ resource "aws_wafv2_web_acl_association" "alb_waf_assoc" {
 ############################################################
 # 17. AWS SNS
 ############################################################
+
+
+# 1. CloudWatch Logs group that will hold the delivery records
+resource "aws_cloudwatch_log_group" "sms_delivery" {
+  name              = "/aws/sns/sms-delivery"
+  retention_in_days = 30           # keep 30 days; adjust to taste
+}
+
+data "aws_iam_policy_document" "sns_logs_trust" {
+  statement {
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["sns.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "sns_delivery_status" {
+  name               = "snsSmsDeliveryStatus"
+  assume_role_policy = data.aws_iam_policy_document.sns_logs_trust.json
+}
+
+data "aws_iam_policy_document" "sns_logs_write" {
+  statement {
+    actions = [
+      "logs:CreateLogStream",
+      "logs:PutLogEvents"
+    ]
+    resources = [
+      "${aws_cloudwatch_log_group.sms_delivery.arn}:*"
+    ]
+  }
+}
+
+resource "aws_iam_role_policy" "sns_delivery_status" {
+  role   = aws_iam_role.sns_delivery_status.id
+  policy = data.aws_iam_policy_document.sns_logs_write.json
+}
+
+# 4. Account-wide SMS preferences — now with logging enabled
+resource "aws_sns_sms_preferences" "global" {
+  default_sms_type                      = "Promotional"   
+  default_sender_id                     = "AnimAlert"
+  monthly_spend_limit                   = "20"
+
+  delivery_status_iam_role_arn          = aws_iam_role.sns_delivery_status.arn
+  delivery_status_success_sampling_rate = 100  # 0-100 (%). 100 = log every success
+}
+
+#    Only needed if you want a *different* sampling-rate for one topic.
 resource "aws_sns_topic" "sms_alerts" {
   name = "sms-alerts"
+   lifecycle {
+    prevent_destroy = true      
+  }
 }
+
 resource "aws_sns_topic" "sms_alerts_stage" {
   name = "sms-alerts-stage"
+  lifecycle {
+    prevent_destroy = true      
+  }
 }
-resource "aws_sns_sms_preferences" "global" {
-  default_sms_type  = "Promotional"     # or "Promotional"
-  default_sender_id = "AnimAlert"             # 1–11 alphanumeric chars
-  monthly_spend_limit = "20"              # USD
-}
+
 # These attributes map 1-to-1 with the console settings :contentReference[oaicite:0]{index=0}
 
 resource "aws_sns_topic_subscription" "sms" {
@@ -1498,7 +1552,7 @@ data "aws_iam_policy_document" "ecs_task_publish_sns" {
     sid       = "AllowPublishToSmsAlerts"
     effect    = "Allow"
     actions   = ["sns:Publish"]
-    resources = [aws_sns_topic.sms_alerts.arn, aws_sns_topic.sms_alerts_stage.arn]   # <- your topic
+    resources = [aws_sns_topic.sms_alerts.arn, aws_sns_topic.sms_alerts_stage.arn]   
   }
 }
 
