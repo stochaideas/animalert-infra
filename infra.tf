@@ -445,7 +445,7 @@ resource "aws_s3_bucket_policy" "logs_allow_alb" {
   })
 }
 
-resource "aws_s3_bucket_cors_configuration" "cors" {
+resource "aws_s3_bucket_cors_configuration" "cors_images" {
   bucket = aws_s3_bucket.images.id
 
   cors_rule {
@@ -459,7 +459,7 @@ resource "aws_s3_bucket_cors_configuration" "cors" {
     max_age_seconds = 3000
   }
 }
-resource "aws_s3_bucket_cors_configuration" "cors" {
+resource "aws_s3_bucket_cors_configuration" "cors_images_stage" {
   bucket = aws_s3_bucket.images_stage.id
   cors_rule {
     id              = "web-and-local"
@@ -473,7 +473,7 @@ resource "aws_s3_bucket_cors_configuration" "cors" {
     max_age_seconds = 3000
   }
 }
-resource "aws_s3_bucket_cors_configuration" "cors" {
+resource "aws_s3_bucket_cors_configuration" "cors_pdfs_stage" {
   bucket = aws_s3_bucket.pdfs_stage.id
   cors_rule {
     id              = "web-and-local"
@@ -487,7 +487,7 @@ resource "aws_s3_bucket_cors_configuration" "cors" {
     max_age_seconds = 3000
   }
 }
-resource "aws_s3_bucket_cors_configuration" "cors" {
+resource "aws_s3_bucket_cors_configuration" "cors_pdf" {
   bucket = aws_s3_bucket.pdfs.id
 
   cors_rule {
@@ -1226,7 +1226,7 @@ resource "aws_db_parameter_group" "postgres" {
   }
 }
 
-resource "aws_db_instance" "postgres" {
+resource "aws_db_instance" "postgres-production" {
   identifier                          = "animalert-postgres-prod"
   engine                              = "postgres"
   engine_version                      = "17.6"
