@@ -1507,8 +1507,6 @@ resource "aws_sns_topic" "sms_alerts" {
    lifecycle {
     prevent_destroy = true      
   }
-  delivery_status_iam_role_arn          = aws_iam_role.sns_delivery_status.arn
-  delivery_status_success_sampling_rate = 100
 }
 
 resource "aws_sns_topic" "sms_alerts_stage" {
@@ -1516,8 +1514,6 @@ resource "aws_sns_topic" "sms_alerts_stage" {
   lifecycle {
     prevent_destroy = true      
   }
-  delivery_status_iam_role_arn          = aws_iam_role.sns_delivery_status.arn
-  delivery_status_success_sampling_rate = 100
 }
 
 # These attributes map 1-to-1 with the console settings :contentReference[oaicite:0]{index=0}
