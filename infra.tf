@@ -250,8 +250,6 @@ resource "aws_s3_bucket" "images" {
     }
   }
 
-  versioning { enabled = true }
-
   lifecycle { prevent_destroy = true }
 }
 
@@ -266,8 +264,6 @@ resource "aws_s3_bucket" "logs" {
       }
     }
   }
-
-  versioning { enabled = true }
 
   lifecycle { prevent_destroy = true }
 }
@@ -284,8 +280,6 @@ resource "aws_s3_bucket" "backups" {
     }
   }
 
-  versioning { enabled = true }
-
   lifecycle { prevent_destroy = true }
 }
 
@@ -300,8 +294,6 @@ resource "aws_s3_bucket" "images_stage" {
       }
     }
   }
-
-  versioning { enabled = true }
 
   lifecycle { prevent_destroy = true }
 }
@@ -318,8 +310,6 @@ resource "aws_s3_bucket" "logs_stage" {
     }
   }
 
-  versioning { enabled = true }
-
   lifecycle { prevent_destroy = true }
 }
 
@@ -334,8 +324,6 @@ resource "aws_s3_bucket" "backups_stage" {
       }
     }
   }
-
-  versioning { enabled = true }
 
   lifecycle { prevent_destroy = true }
 }
@@ -352,8 +340,6 @@ resource "aws_s3_bucket" "pdf_stage" {
     }
   }
 
-  versioning { enabled = true }
-
   lifecycle { prevent_destroy = true }
 }
 
@@ -368,8 +354,6 @@ resource "aws_s3_bucket" "pdfs" {
       }
     }
   }
-
-  versioning { enabled = true }
 
   lifecycle { prevent_destroy = true }
 }
