@@ -234,7 +234,7 @@ locals {
 ###############################################################################
 resource "aws_kms_key" "s3_default" {
   description             = "CMK for S3 default encryption (Animalert buckets)"
-  enable_key_rotation     = true
+  enable_key_rotation     = false
   deletion_window_in_days = 30
 }
 
@@ -1078,7 +1078,7 @@ resource "aws_db_instance" "postgres" {
 resource "aws_kms_key" "rds" {
   description             = "KMS key for RDS at-rest encryption (animalert)"
   deletion_window_in_days = 10
-  enable_key_rotation     = true
+  enable_key_rotation     = false
 
   tags = {
     Name = "animalert-rds-key"
