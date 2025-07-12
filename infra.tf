@@ -1276,6 +1276,9 @@ resource "aws_db_instance" "postgres-production" {
   skip_final_snapshot                 = true
   apply_immediately                   = true
 
+  lifecycle {
+    prevent_destroy = true      
+  }
   tags = {
     Name = "animalert-postgres-prod"
   }
@@ -1501,24 +1504,22 @@ resource "aws_sns_sms_preferences" "global" {
 #    Only needed if you want a *different* sampling-rate for one topic.
 resource "aws_sns_topic" "sms_alerts" {
   name = "sms-alerts"
-
+   lifecycle {
+    prevent_destroy = true      
+  }
   delivery_status_iam_role_arn          = aws_iam_role.sns_delivery_status.arn
   delivery_status_success_sampling_rate = 100
 }
 
 resource "aws_sns_topic" "sms_alerts_stage" {
   name = "sms-alerts-stage"
-
+  lifecycle {
+    prevent_destroy = true      
+  }
   delivery_status_iam_role_arn          = aws_iam_role.sns_delivery_status.arn
   delivery_status_success_sampling_rate = 100
 }
 
-resource "aws_sns_topic" "sms_alerts" {
-  name = "sms-alerts"
-}
-resource "aws_sns_topic" "sms_alerts_stage" {
-  name = "sms-alerts-stage"
-}
 # These attributes map 1-to-1 with the console settings :contentReference[oaicite:0]{index=0}
 
 resource "aws_sns_topic_subscription" "sms" {
@@ -1559,7 +1560,7 @@ data "aws_iam_policy_document" "ecs_task_publish_sns" {
     sid       = "AllowPublishToSmsAlerts"
     effect    = "Allow"
     actions   = ["sns:Publish"]
-    resources = [aws_sns_topic.sms_alerts.arn, aws_sns_topic.sms_alerts_stage.arn]   # <- your topic
+    resources = [aws_sns_topic.sms_alerts.arn, aws_sns_topic.sms_alerts_stage.arn]   
   }
 }
 
