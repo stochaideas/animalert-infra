@@ -707,6 +707,61 @@ resource "aws_ecs_cluster" "main" {
 ###############################################################################
 # 9. IAM roles (execution / task)
 ###############################################################################
+###############################################################################
+# 9-bis.  IAM role **only for the STAGE ECS tasks**
+###############################################################################
+
+# ---- 1.  Trust relationship (allow ECS to assume the role) ------------------
+data "aws_iam_policy_document" "ecs_task_stage_assume_role" {
+  statement {
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["ecs-tasks.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "ecs_task_stage_role" {
+  name               = "ecsTaskStageRole"                    # distinct name
+  assume_role_policy = data.aws_iam_policy_document.ecs_task_stage_assume_role.json
+}
+
+# ---- 2.  S3-only policy – limited to *_stage buckets ------------------------
+data "aws_iam_policy_document" "ecs_task_stage_s3_policy_doc" {
+  statement {
+    sid     = "AllowStageS3Access"
+    effect  = "Allow"
+    actions = [
+      "s3:GetObject",
+      "s3:PutObject"
+    ]
+    resources = [
+      "${aws_s3_bucket.images_stage.arn}/*",
+      "${aws_s3_bucket.logs_stage.arn}/*",
+      "${aws_s3_bucket.backups_stage.arn}/*",
+      "${aws_s3_bucket.pdf_stage.arn}/*"
+    ]
+  }
+}
+
+resource "aws_iam_policy" "ecs_task_stage_s3_policy" {
+  name   = "ecsTaskStageS3Policy"
+  policy = data.aws_iam_policy_document.ecs_task_stage_s3_policy_doc.json
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_task_stage_s3_policy_attachment" {
+  role       = aws_iam_role.ecs_task_stage_role.name
+  policy_arn = aws_iam_policy.ecs_task_stage_s3_policy.arn
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_task_stage_publish_sns" {
+  role       = aws_iam_role.ecs_task_stage_role.name
+  policy_arn = aws_iam_policy.ecs_task_publish_sns.arn
+}
+
+
 data "aws_iam_policy_document" "ecs_task_execution_assume_role" {
   statement {
     actions = ["sts:AssumeRole"]
@@ -908,7 +963,7 @@ resource "aws_ecs_task_definition" "web_app_task_stage" {
   cpu                      = 256
   memory                   = 512
   execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
-  task_role_arn            = aws_iam_role.ecs_task_role.arn
+  task_role_arn            = aws_iam_role.ecs_task_stage_role.arn
 
   container_definitions = jsonencode([
     {
@@ -1480,7 +1535,7 @@ resource "aws_ecs_task_definition" "db_migrate_task_stage" {
   cpu                      = 256
   memory                   = 512
   execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
-  task_role_arn            = aws_iam_role.ecs_task_role.arn
+  task_role_arn            = aws_iam_role.ecs_task_stage_role.arn
 
   container_definitions = jsonencode([
     {
