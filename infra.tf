@@ -232,17 +232,210 @@ locals {
 ###############################################################################
 # 4. S3 buckets (images, logs, backups)
 ###############################################################################
+resource "aws_kms_key" "s3_default" {
+  description             = "CMK for S3 default encryption (Animalert buckets)"
+  enable_key_rotation     = false
+  deletion_window_in_days = 30
+}
+
 resource "aws_s3_bucket" "images" {
   bucket = "animalert-images"
+
+  server_side_encryption_configuration {
+    rule {
+      apply_server_side_encryption_by_default {
+        sse_algorithm     = "aws:kms"
+        kms_master_key_id = aws_kms_key.s3_default.id
+      }
+    }
+  }
+
+  lifecycle { prevent_destroy = true }
 }
 
 resource "aws_s3_bucket" "logs" {
   bucket = "animalert-logs"
+
+  server_side_encryption_configuration {
+    rule {
+      apply_server_side_encryption_by_default {
+        sse_algorithm     = "aws:kms"
+        kms_master_key_id = aws_kms_key.s3_default.id
+      }
+    }
+  }
+
+  lifecycle { prevent_destroy = true }
 }
 
 resource "aws_s3_bucket" "backups" {
   bucket = "animalert-backups"
+
+  server_side_encryption_configuration {
+    rule {
+      apply_server_side_encryption_by_default {
+        sse_algorithm     = "aws:kms"
+        kms_master_key_id = aws_kms_key.s3_default.id
+      }
+    }
+  }
+
+  lifecycle { prevent_destroy = true }
 }
+
+resource "aws_s3_bucket" "images_stage" {
+  bucket = "animalert-images-stage"
+
+  server_side_encryption_configuration {
+    rule {
+      apply_server_side_encryption_by_default {
+        sse_algorithm     = "aws:kms"
+        kms_master_key_id = aws_kms_key.s3_default.id
+      }
+    }
+  }
+
+  lifecycle { prevent_destroy = true }
+}
+
+resource "aws_s3_bucket" "logs_stage" {
+  bucket = "animalert-logs-stage"
+
+  server_side_encryption_configuration {
+    rule {
+      apply_server_side_encryption_by_default {
+        sse_algorithm     = "aws:kms"
+        kms_master_key_id = aws_kms_key.s3_default.id
+      }
+    }
+  }
+
+  lifecycle { prevent_destroy = true }
+}
+
+resource "aws_s3_bucket" "backups_stage" {
+  bucket = "animalert-backups-stage"
+
+  server_side_encryption_configuration {
+    rule {
+      apply_server_side_encryption_by_default {
+        sse_algorithm     = "aws:kms"
+        kms_master_key_id = aws_kms_key.s3_default.id
+      }
+    }
+  }
+
+  lifecycle { prevent_destroy = true }
+}
+
+resource "aws_s3_bucket" "pdf_stage" {
+  bucket = "animalert-pdfs-stage"
+
+  server_side_encryption_configuration {
+    rule {
+      apply_server_side_encryption_by_default {
+        sse_algorithm     = "aws:kms"
+        kms_master_key_id = aws_kms_key.s3_default.id
+      }
+    }
+  }
+
+  lifecycle { prevent_destroy = true }
+}
+
+resource "aws_s3_bucket" "pdfs" {
+  bucket = "animalert-pdfs"
+
+  server_side_encryption_configuration {
+    rule {
+      apply_server_side_encryption_by_default {
+        sse_algorithm     = "aws:kms"
+        kms_master_key_id = aws_kms_key.s3_default.id
+      }
+    }
+  }
+
+  lifecycle { prevent_destroy = true }
+}
+
+###############################################################################
+# S3 – block all public access on every bucket
+###############################################################################
+
+resource "aws_s3_bucket_public_access_block" "images" {
+  bucket = aws_s3_bucket.images.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_public_access_block" "logs" {
+  bucket = aws_s3_bucket.logs.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_public_access_block" "backups" {
+  bucket = aws_s3_bucket.backups.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_public_access_block" "pdfs" {
+  bucket = aws_s3_bucket.pdfs.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# ─────────────── STAGE buckets ───────────────
+
+resource "aws_s3_bucket_public_access_block" "images_stage" {
+  bucket = aws_s3_bucket.images_stage.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_public_access_block" "logs_stage" {
+  bucket = aws_s3_bucket.logs_stage.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_public_access_block" "backups_stage" {
+  bucket = aws_s3_bucket.backups_stage.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_public_access_block" "pdf_stage" {
+  bucket = aws_s3_bucket.pdf_stage.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
 
 data "aws_caller_identity" "current" {}
 
@@ -275,7 +468,7 @@ resource "aws_s3_bucket_policy" "logs_allow_alb" {
   })
 }
 
-resource "aws_s3_bucket_cors_configuration" "cors" {
+resource "aws_s3_bucket_cors_configuration" "cors_images" {
   bucket = aws_s3_bucket.images.id
 
   cors_rule {
@@ -283,15 +476,54 @@ resource "aws_s3_bucket_cors_configuration" "cors" {
     allowed_methods = ["PUT", "POST", "GET", "HEAD"]
     allowed_origins = [
       var.site_origin,
-      var.local_origin,
-      var.stage_origin
     ]
     allowed_headers = ["*"]
     expose_headers  = ["ETag"]
     max_age_seconds = 3000
   }
 }
+resource "aws_s3_bucket_cors_configuration" "cors_images_stage" {
+  bucket = aws_s3_bucket.images_stage.id
+  cors_rule {
+    id              = "web-and-local"
+    allowed_methods = ["PUT", "POST", "GET", "HEAD"]
+    allowed_origins = [
+      var.stage_origin,
+      var.local_origin
+    ]
+    allowed_headers = ["*"]
+    expose_headers  = ["ETag"]
+    max_age_seconds = 3000
+  }
+}
+resource "aws_s3_bucket_cors_configuration" "cors_pdfs_stage" {
+  bucket = aws_s3_bucket.pdf_stage.id
+  cors_rule {
+    id              = "web-and-local"
+    allowed_methods = ["PUT", "POST", "GET", "HEAD"]
+    allowed_origins = [
+      var.stage_origin,
+      var.local_origin
+    ]
+    allowed_headers = ["*"]
+    expose_headers  = ["ETag"]
+    max_age_seconds = 3000
+  }
+}
+resource "aws_s3_bucket_cors_configuration" "cors_pdf" {
+  bucket = aws_s3_bucket.pdfs.id
 
+  cors_rule {
+    id              = "web-and-local"
+    allowed_methods = ["PUT", "POST", "GET", "HEAD"]
+    allowed_origins = [
+      var.site_origin,
+    ]
+    allowed_headers = ["*"]
+    expose_headers  = ["ETag"]
+    max_age_seconds = 3000
+  }
+}
 ###############################################################################
 # 5. ECR repository
 ###############################################################################
@@ -498,6 +730,61 @@ resource "aws_ecs_cluster" "main" {
 ###############################################################################
 # 9. IAM roles (execution / task)
 ###############################################################################
+###############################################################################
+# 9-bis.  IAM role **only for the STAGE ECS tasks**
+###############################################################################
+
+# ---- 1.  Trust relationship (allow ECS to assume the role) ------------------
+data "aws_iam_policy_document" "ecs_task_stage_assume_role" {
+  statement {
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["ecs-tasks.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "ecs_task_stage_role" {
+  name               = "ecsTaskStageRole"                    # distinct name
+  assume_role_policy = data.aws_iam_policy_document.ecs_task_stage_assume_role.json
+}
+
+# ---- 2.  S3-only policy – limited to *_stage buckets ------------------------
+data "aws_iam_policy_document" "ecs_task_stage_s3_policy_doc" {
+  statement {
+    sid     = "AllowStageS3Access"
+    effect  = "Allow"
+    actions = [
+      "s3:GetObject",
+      "s3:PutObject"
+    ]
+    resources = [
+      "${aws_s3_bucket.images_stage.arn}/*",
+      "${aws_s3_bucket.logs_stage.arn}/*",
+      "${aws_s3_bucket.backups_stage.arn}/*",
+      "${aws_s3_bucket.pdf_stage.arn}/*"
+    ]
+  }
+}
+
+resource "aws_iam_policy" "ecs_task_stage_s3_policy" {
+  name   = "ecsTaskStageS3Policy"
+  policy = data.aws_iam_policy_document.ecs_task_stage_s3_policy_doc.json
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_task_stage_s3_policy_attachment" {
+  role       = aws_iam_role.ecs_task_stage_role.name
+  policy_arn = aws_iam_policy.ecs_task_stage_s3_policy.arn
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_task_stage_publish_sns" {
+  role       = aws_iam_role.ecs_task_stage_role.name
+  policy_arn = aws_iam_policy.ecs_task_publish_sns.arn
+}
+
+
 data "aws_iam_policy_document" "ecs_task_execution_assume_role" {
   statement {
     actions = ["sts:AssumeRole"]
@@ -546,7 +833,8 @@ data "aws_iam_policy_document" "ecs_task_s3_policy_doc" {
     resources = [
       "${aws_s3_bucket.images.arn}/*",
       "${aws_s3_bucket.logs.arn}/*",
-      "${aws_s3_bucket.backups.arn}/*"
+      "${aws_s3_bucket.backups.arn}/*",
+      "${aws_s3_bucket.pdfs.arn}/*"
     ]
   }
 }
@@ -674,6 +962,10 @@ resource "aws_ecs_task_definition" "web_app_task" {
         {
           name = "CLERK_SECRET_KEY",
           value = var.clerk_secret_key_prod
+        },
+        {
+          name = "AWS_S3_PDF_BUCKET_NAME",
+          value = "animalert-pdfs"
         }
 
       ],
@@ -698,7 +990,7 @@ resource "aws_ecs_task_definition" "web_app_task_stage" {
   cpu                      = 256
   memory                   = 512
   execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
-  task_role_arn            = aws_iam_role.ecs_task_role.arn
+  task_role_arn            = aws_iam_role.ecs_task_stage_role.arn
 
   container_definitions = jsonencode([
     {
@@ -792,6 +1084,10 @@ resource "aws_ecs_task_definition" "web_app_task_stage" {
         {
           name = "CLERK_SECRET_KEY",
           value = var.clerk_secret_key_stage
+        },
+        {
+          name = "AWS_S3_PDF_BUCKET_NAME",
+          value = "animalert-pdfs-stage"
         }
 
       ],
@@ -903,6 +1199,95 @@ resource "aws_db_instance" "postgres" {
     Name = "animalert-postgres"
   }
 }
+
+
+###NEW DB###
+
+resource "aws_kms_key" "rds" {
+  description             = "KMS key for RDS at-rest encryption (animalert)"
+  deletion_window_in_days = 10
+  enable_key_rotation     = false
+
+  tags = {
+    Name = "animalert-rds-key"
+  }
+}
+
+resource "aws_kms_alias" "rds" {
+  name          = "alias/animalert/rds"
+  target_key_id = aws_kms_key.rds.key_id
+}
+
+resource "random_password" "rds" {
+  length  = 32
+  special = true
+}
+
+resource "aws_secretsmanager_secret" "rds_master" {
+  name                    = "animalert/postgres/master"
+  description             = "Master credentials for animalert Postgres"
+  recovery_window_in_days = 7
+  kms_key_id              = aws_kms_key.rds.arn
+}
+
+resource "aws_secretsmanager_secret_version" "rds_master" {
+  secret_id     = aws_secretsmanager_secret.rds_master.id
+  secret_string = jsonencode({
+    username = var.db_user
+    password = random_password.rds.result
+  })
+}
+
+resource "aws_db_parameter_group" "postgres" {
+  name        = "animalert-postgres-params"
+  family      = "postgres17"
+  description = "Enforce SSL and raise security posture"
+
+  parameter {
+    name  = "rds.force_ssl"
+    value = "1"
+  }
+}
+
+resource "aws_db_instance" "postgres-production" {
+  identifier                          = "animalert-postgres-prod"
+  engine                              = "postgres"
+  engine_version                      = "17.6"
+  instance_class                      = "db.t4g.micro"
+  allocated_storage                   = 20
+  storage_type                        = "gp3"
+  max_allocated_storage               = 100
+  deletion_protection                 = true
+  db_name                             = var.db_name
+  username                            = var.db_user
+  password                            = random_password.rds.result
+  port                                = 5432
+  publicly_accessible                 = false
+  multi_az                            = true
+  vpc_security_group_ids              = [aws_security_group.db_sg.id]
+  db_subnet_group_name                = aws_db_subnet_group.postgres.name
+  kms_key_id                          = aws_kms_key.rds.arn
+  storage_encrypted                   = true
+  iam_database_authentication_enabled = true
+  parameter_group_name                = aws_db_parameter_group.postgres.name
+  ca_cert_identifier                  = "rds-ca-ecc384-g1"
+  backup_retention_period             = 7
+  auto_minor_version_upgrade          = true
+  skip_final_snapshot                 = true
+  apply_immediately                   = true
+
+  tags = {
+    Name = "animalert-postgres-prod"
+  }
+}
+
+output "db_credentials_secret_arn" {
+  description = "ARN of the Secrets Manager secret holding the master credentials"
+  value       = aws_secretsmanager_secret.rds_master.arn
+  sensitive   = true
+}
+
+
 
 ###############################################################################
 # 14. Outputs
@@ -1181,7 +1566,7 @@ resource "aws_ecs_task_definition" "db_migrate_task_stage" {
   cpu                      = 256
   memory                   = 512
   execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
-  task_role_arn            = aws_iam_role.ecs_task_role.arn
+  task_role_arn            = aws_iam_role.ecs_task_stage_role.arn
 
   container_definitions = jsonencode([
     {
