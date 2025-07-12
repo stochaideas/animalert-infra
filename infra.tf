@@ -939,6 +939,10 @@ resource "aws_ecs_task_definition" "web_app_task" {
         {
           name = "CLERK_SECRET_KEY",
           value = var.clerk_secret_key_prod
+        },
+        {
+          name = "AWS_S3_PDF_BUCKET_NAME",
+          value = "animalert-pdfs"
         }
 
       ],
@@ -1057,6 +1061,10 @@ resource "aws_ecs_task_definition" "web_app_task_stage" {
         {
           name = "CLERK_SECRET_KEY",
           value = var.clerk_secret_key_stage
+        },
+        {
+          name = "AWS_S3_PDF_BUCKET_NAME",
+          value = "animalert-pdfs-stage"
         }
 
       ],
