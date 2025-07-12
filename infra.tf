@@ -1453,7 +1453,16 @@ resource "aws_cloudwatch_log_group" "sms_delivery" {
   name              = "/aws/sns/sms-delivery"
   retention_in_days = 30           # keep 30 days; adjust to taste
 }
-
+data "aws_iam_policy_document" "sns_logs_write" {
+  statement {
+    actions = [
+      "logs:CreateLogGroup",
+      "logs:CreateLogStream",
+      "logs:PutLogEvents",
+    ]
+    resources = ["${aws_cloudwatch_log_group.sms_delivery.arn}:*"]
+  }
+}
 data "aws_iam_policy_document" "sns_logs_trust" {
   statement {
     actions = ["sts:AssumeRole"]
@@ -1468,18 +1477,6 @@ data "aws_iam_policy_document" "sns_logs_trust" {
 resource "aws_iam_role" "sns_delivery_status" {
   name               = "snsSmsDeliveryStatus"
   assume_role_policy = data.aws_iam_policy_document.sns_logs_trust.json
-}
-
-data "aws_iam_policy_document" "sns_logs_write" {
-  statement {
-    actions = [
-      "logs:CreateLogStream",
-      "logs:PutLogEvents"
-    ]
-    resources = [
-      "${aws_cloudwatch_log_group.sms_delivery.arn}:*"
-    ]
-  }
 }
 
 resource "aws_iam_role_policy" "sns_delivery_status" {
