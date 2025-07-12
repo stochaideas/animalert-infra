@@ -459,7 +459,48 @@ resource "aws_s3_bucket_cors_configuration" "cors" {
     max_age_seconds = 3000
   }
 }
+resource "aws_s3_bucket_cors_configuration" "cors" {
+  bucket = aws_s3_bucket.images_stage.id
+  cors_rule {
+    id              = "web-and-local"
+    allowed_methods = ["PUT", "POST", "GET", "HEAD"]
+    allowed_origins = [
+      var.stage_origin,
+      var.local_origin
+    ]
+    allowed_headers = ["*"]
+    expose_headers  = ["ETag"]
+    max_age_seconds = 3000
+  }
+}
+resource "aws_s3_bucket_cors_configuration" "cors" {
+  bucket = aws_s3_bucket.pdfs_stage.id
+  cors_rule {
+    id              = "web-and-local"
+    allowed_methods = ["PUT", "POST", "GET", "HEAD"]
+    allowed_origins = [
+      var.stage_origin,
+      var.local_origin
+    ]
+    allowed_headers = ["*"]
+    expose_headers  = ["ETag"]
+    max_age_seconds = 3000
+  }
+}
+resource "aws_s3_bucket_cors_configuration" "cors" {
+  bucket = aws_s3_bucket.pdfs.id
 
+  cors_rule {
+    id              = "web-and-local"
+    allowed_methods = ["PUT", "POST", "GET", "HEAD"]
+    allowed_origins = [
+      var.site_origin,
+    ]
+    allowed_headers = ["*"]
+    expose_headers  = ["ETag"]
+    max_age_seconds = 3000
+  }
+}
 ###############################################################################
 # 5. ECR repository
 ###############################################################################
@@ -714,7 +755,8 @@ data "aws_iam_policy_document" "ecs_task_s3_policy_doc" {
     resources = [
       "${aws_s3_bucket.images.arn}/*",
       "${aws_s3_bucket.logs.arn}/*",
-      "${aws_s3_bucket.backups.arn}/*"
+      "${aws_s3_bucket.backups.arn}/*",
+      "${aws_s3_bucket.pdfs.arn}/*"
     ]
   }
 }
