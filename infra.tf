@@ -1486,7 +1486,7 @@ resource "aws_iam_role_policy" "sns_delivery_status" {
 
 # 4. Account-wide SMS preferences — now with logging enabled
 resource "aws_sns_sms_preferences" "global" {
-  default_sms_type                      = "Transactional"   
+  default_sms_type                      = "Promotional"   
   default_sender_id                     = "AnimAlert"
   monthly_spend_limit                   = "20"
 
