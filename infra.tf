@@ -1499,10 +1499,6 @@ data "aws_iam_policy_document" "sns_publish" {
     resources = [aws_sns_topic.sms_alerts.arn, aws_sns_topic.sms_alerts_stage.arn]
   }
 }
-resource "aws_iam_role_policy" "sns_delivery_status" {
-  role   = aws_iam_role.sns_delivery_status.id
-  policy = data.aws_iam_policy_document.sns_logs_write.json
-}
 resource "aws_iam_policy" "sns_publish" {
   name   = "sns-publish-sms-alerts"
   policy = data.aws_iam_policy_document.sns_publish.json
