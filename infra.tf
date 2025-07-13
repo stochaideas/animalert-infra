@@ -1443,7 +1443,7 @@ data "aws_iam_policy_document" "sns_logs_write" {
       "logs:CreateLogStream",
       "logs:PutLogEvents",
     ]
-    resources = ["${aws_cloudwatch_log_group.sms_delivery.arn}:*"]
+    resources = ["*"]
   }
 }
 data "aws_iam_policy_document" "sns_logs_trust" {
@@ -1469,7 +1469,7 @@ resource "aws_iam_role_policy" "sns_delivery_status" {
 
 # 4. Account-wide SMS preferences — now with logging enabled
 resource "aws_sns_sms_preferences" "global" {
-  default_sms_type                      = "Promotional"   
+  default_sms_type                      = "Transactional"   
   default_sender_id                     = "AnimAlert"
   monthly_spend_limit                   = "20"
 
