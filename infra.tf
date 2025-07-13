@@ -119,6 +119,15 @@ variable "clerk_secret_key_stage" {
   type = string
   default = "CLERK_K3Y33"
 }
+variable "petitioncc_stage" {
+  type = string
+  default = "animalert@googlegroups.com"
+}
+variable "petitioncc" {
+  type = string
+  default = "animalert@googlegroups.com"
+}
+
 
 ###############################################################################
 # 2. ACM certificate
@@ -949,7 +958,11 @@ resource "aws_ecs_task_definition" "web_app_task" {
         {
           name = "AWS_S3_PDF_BUCKET_NAME",
           value = "animalert-pdfs-prod"
-        }
+        },
+        {
+          name  = "PETITION_CC",
+          value = var.petitioncc
+        },
 
       ],
 
@@ -1071,7 +1084,11 @@ resource "aws_ecs_task_definition" "web_app_task_stage" {
         {
           name = "AWS_S3_PDF_BUCKET_NAME",
           value = "animalert-pdfs-stage"
-        }
+        },
+        {
+          name  = "PETITION_CC",
+          value = var.petitioncc_stage
+        },
 
       ],
 
