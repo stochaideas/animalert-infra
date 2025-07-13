@@ -799,6 +799,39 @@ resource "aws_iam_role_policy_attachment" "ecs_task_s3_policy_attachment" {
   policy_arn = aws_iam_policy.ecs_task_s3_policy.arn
 }
 
+###############################
+# KMS permissions for ECS task
+###############################
+
+#--- replace with the real CMK ARN ----------------------------
+locals {
+  cmk_arn = "arn:aws:kms:eu-central-1:585008072921:key/68709b05-4b37-41bf-bea5-665012cdbd28"
+}
+
+data "aws_iam_policy_document" "ecs_task_kms_policy_doc" {
+  statement {
+    sid     = "AllowKmsEncryptDecrypt"
+    effect  = "Allow"
+    actions = [
+      "kms:GenerateDataKey",
+      "kms:Decrypt",
+      "kms:DescribeKey"
+    ]
+    resources = [local.cmk_arn]
+  }
+}
+
+resource "aws_iam_policy" "ecs_task_kms_policy" {
+  name   = "ecsTaskKmsPolicy"
+  policy = data.aws_iam_policy_document.ecs_task_kms_policy_doc.json
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_task_role_kms_policy_attachment" {
+  role       = aws_iam_role.ecs_task_role.name 
+  policy_arn = aws_iam_policy.ecs_task_kms_policy.arn
+}
+
+
 ###############################################################################
 # 10. CloudWatch log group
 ###############################################################################
