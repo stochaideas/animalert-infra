@@ -733,7 +733,7 @@ resource "aws_iam_policy" "ecs_task_stage_s3_policy" {
   policy = data.aws_iam_policy_document.ecs_task_stage_s3_policy_doc.json
 }
 
-resource "aws_iam_role_policy_attachment" "ecs_task_role_kms_policy_attachment" {
+resource "aws_iam_role_policy_attachment" "ecs_task_role_stage_kms_policy_attachment" {
   role       = aws_iam_role.ecs_task_stage_role.name 
   policy_arn = aws_iam_policy.ecs_task_kms_policy.arn
 }
