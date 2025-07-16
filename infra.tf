@@ -1037,7 +1037,7 @@ resource "aws_ecs_task_definition" "web_app_task_stage" {
         },
         {
           name  = "AWS_S3_BUCKET_NAME",
-          value = "animalert-images"
+          value = "animalert-images-stage"
         },
         {
           name  = "NODE_ENV",
