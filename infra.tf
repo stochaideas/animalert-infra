@@ -36,7 +36,7 @@ variable "aws_region" {
 
 variable "tls_domain" {
   type    = string
-  default = "anim-alert.org"
+  default = "*.anim-alert.org"
 }
 
 variable "db_name" {
